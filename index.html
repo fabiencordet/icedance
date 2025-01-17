@@ -2,10 +2,41 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Mon Site GitHub Pages</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Danse sur Glace - Accueil</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Bienvenue sur mon site GitHub Pages!</h1>
-    <p>Ceci est une page d'exemple.</p>
+    <header>
+        <h1>Compétitions de Danse sur Glace</h1>
+    </header>
+    <main>
+        <section class="search">
+            <h2>Rechercher une vidéo</h2>
+            <form id="search-form">
+                <input type="text" placeholder="Catégorie d'âge (ex : Benjamin)" id="age-category">
+                <input type="text" placeholder="Ville" id="city">
+                <input type="date" id="date">
+                <input type="text" placeholder="Catégorie (Danse, Couple)" id="category">
+                <input type="text" placeholder="Danse (Libre, Imposée)" id="dance">
+                <button type="button" id="search-btn">Rechercher</button>
+            </form>
+        </section>
+        <section class="videos">
+            <h2>Vidéos</h2>
+            <div id="video-list">
+                <!-- Les vidéos filtrées apparaîtront ici -->
+                <div class="video-item">
+                    <a href="video.html">
+                        <img src="placeholder.jpg" alt="Miniature vidéo">
+                        <p>Coupe d'Automne 2024 - Lyon - Benjamin</p>
+                    </a>
+                </div>
+            </div>
+        </section>
+    </main>
+    <footer>
+        <p>&copy; 2025 Danse sur Glace</p>
+    </footer>
 </body>
 </html>
