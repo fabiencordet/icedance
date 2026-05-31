@@ -342,6 +342,51 @@
     .img-preview { width: 100%; max-height: 160px; object-fit: cover; border-radius: var(--radius-sm); margin-top: 0.6rem; display: none; }
     .comp-thumb { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; vertical-align: middle; }
 
+    /* ===== SORTABLE TABLE HEADERS ===== */
+    th.sortable {
+      cursor: pointer; user-select: none; white-space: nowrap;
+      position: relative; padding-right: 1.8rem !important;
+    }
+    th.sortable:hover { color: var(--gold-light); }
+    .th-inner { display: flex; align-items: center; gap: 0.35rem; }
+    .sort-icon { font-size: 0.7rem; opacity: 0.35; transition: opacity 0.15s; flex-shrink: 0; }
+    th.sortable:hover .sort-icon, th.sort-asc .sort-icon, th.sort-desc .sort-icon { opacity: 1; color: var(--gold); }
+    th.sort-asc .sort-icon::after  { content: '▲'; }
+    th.sort-desc .sort-icon::after { content: '▼'; }
+    th.sortable:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
+
+    /* column filter dropdown */
+    .col-filter-wrap { position: relative; display: inline-block; }
+    .col-filter-btn {
+      background: none; border: none; cursor: pointer; padding: 0 0.1rem;
+      color: var(--text-dim); font-size: 0.75rem; line-height: 1;
+      transition: color 0.15s; flex-shrink: 0;
+    }
+    .col-filter-btn:hover, .col-filter-btn.active { color: var(--gold); }
+    .col-filter-dropdown {
+      position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+      background: var(--navy-mid); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      min-width: 160px; max-width: 220px; max-height: 260px; overflow-y: auto;
+      z-index: 1000; padding: 0.4rem 0;
+    }
+    .col-filter-dropdown input {
+      width: calc(100% - 1rem); margin: 0.3rem 0.5rem 0.4rem;
+      background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+      border-radius: 4px; padding: 0.3rem 0.5rem; color: var(--text);
+      font-size: 0.8rem; outline: none;
+    }
+    .col-filter-opt {
+      padding: 0.4rem 0.8rem; font-size: 0.82rem; cursor: pointer;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .col-filter-opt:hover { background: rgba(201,168,76,0.1); color: var(--gold-light); }
+    .col-filter-opt.selected { color: var(--gold); }
+    .col-filter-opt input[type=checkbox] { accent-color: var(--gold); flex-shrink: 0; }
+    .col-filter-actions { display: flex; gap: 0.4rem; padding: 0.4rem 0.6rem 0.2rem; border-top: 1px solid var(--border); margin-top: 0.2rem; }
+    .col-filter-actions button { flex: 1; font-size: 0.75rem; padding: 0.3rem; }
+
     /* toggle sections */
     details > summary { cursor: pointer; list-style: none; }
     details > summary::after { content: ' ▶'; font-size: 0.7rem; color: var(--text-dim); }
@@ -524,13 +569,11 @@
       <div class="card">
         <div class="table-wrap">
           <table>
-            <thead>
-              <tr>
-                <th>Patineur(s)</th><th>Nation</th><th>Année</th><th>Compétition</th>
-                <th>Saison</th><th>Catégorie</th><th>Segment</th><th>Score total</th>
-                <th>Éléments</th><th>Composantes</th><th>Déductions</th><th></th>
-              </tr>
-            </thead>
+            <thead id="global-thead"><tr>
+              <th>Patineur(s)</th><th>Nation</th><th>Année</th><th>Compétition</th>
+              <th>Saison</th><th>Catégorie</th><th>Segment</th><th>Score total</th>
+              <th>Éléments</th><th>Composantes</th><th>Déductions</th><th></th>
+            </tr></thead>
             <tbody id="global-tbody">
               <tr class="loading-row"><td colspan="12"><div class="spinner"></div></td></tr>
             </tbody>
@@ -1136,7 +1179,175 @@ function fillSelect(id, items) {
   if (old) sel.value = old;
 }
 
-function applyGlobalFilters() {
+// ============================================================
+// GLOBAL TABLE — SORT & COLUMN FILTERS
+// ============================================================
+let globalSort = { col: null, dir: 'asc' };
+let globalColFilters = {}; // { colKey: Set of selected values }
+let globalFiltered = []; // last filtered result (before sort)
+
+const GLOBAL_COLS = [
+  { key: 'skater',    label: 'Patineur(s)',  sortable: true,  filterable: true  },
+  { key: 'nation',    label: 'Nation',       sortable: true,  filterable: true  },
+  { key: 'annee',     label: 'Année',        sortable: true,  filterable: true  },
+  { key: 'comp',      label: 'Compétition',  sortable: true,  filterable: true  },
+  { key: 'saison',    label: 'Saison',       sortable: true,  filterable: true  },
+  { key: 'categorie', label: 'Catégorie',    sortable: true,  filterable: true  },
+  { key: 'segment',   label: 'Segment',      sortable: true,  filterable: true  },
+  { key: 'total',     label: 'Score total',  sortable: true,  filterable: false },
+  { key: 'elem',      label: 'Éléments',     sortable: true,  filterable: false },
+  { key: 'comp_score',label: 'Composantes',  sortable: true,  filterable: false },
+  { key: 'ded',       label: 'Déductions',   sortable: true,  filterable: false },
+  { key: '_actions',  label: '',             sortable: false, filterable: false },
+];
+
+function getEntryVal(e, key) {
+  switch(key) {
+    case 'skater':     return skaterName(e).toLowerCase();
+    case 'nation':     return e.s1?.nation || '';
+    case 'annee':      return e.cs?.comp?.date_debut ? new Date(e.cs.comp.date_debut).getFullYear() : 0;
+    case 'comp':       return (e.cs?.comp?.long_name || e.cs?.comp?.short_name || '').toLowerCase();
+    case 'saison':     return getSaison(e.cs?.comp?.date_debut);
+    case 'categorie':  return e.cs?.nom_categorie || '';
+    case 'segment':    return e.cs?.nom_segment || '';
+    case 'total':      return e.total_segment_score || 0;
+    case 'elem':       return e.total_element_score || 0;
+    case 'comp_score': return e.total_component_score || 0;
+    case 'ded':        return e.total_deductions || 0;
+    default:           return '';
+  }
+}
+
+function buildGlobalThead() {
+  const tr = document.querySelector('#global-thead tr');
+  tr.innerHTML = GLOBAL_COLS.map(col => {
+    if (!col.sortable && !col.filterable) return '<th></th>';
+    const sortCls = globalSort.col === col.key ? (globalSort.dir === 'asc' ? 'sort-asc' : 'sort-desc') : '';
+    const hasColFilter = globalColFilters[col.key]?.size > 0;
+    const filterBtn = col.filterable
+      ? `<span class="col-filter-wrap">
+           <button class="col-filter-btn ${hasColFilter ? 'active' : ''}" title="Filtrer" onclick="event.stopPropagation();toggleColFilterDropdown('${col.key}',this)">▾</button>
+         </span>`
+      : '';
+    return `<th class="sortable ${sortCls}" onclick="sortGlobalTable('${col.key}')">
+      <div class="th-inner">
+        <span>${col.label}</span>
+        ${filterBtn}
+        <span class="sort-icon"></span>
+      </div>
+    </th>`;
+  }).join('');
+}
+
+function sortGlobalTable(col) {
+  if (globalSort.col === col) {
+    globalSort.dir = globalSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    globalSort.col = col;
+    globalSort.dir = 'asc';
+  }
+  buildGlobalThead();
+  globalPage = 1;
+  renderGlobalTable(globalFiltered);
+}
+
+// ---- Column filter dropdown ----
+let openDropdownKey = null;
+let openDropdownEl = null;
+
+function toggleColFilterDropdown(colKey, btnEl) {
+  // Close if already open for same col
+  if (openDropdownKey === colKey) { closeColFilterDropdown(); return; }
+  closeColFilterDropdown();
+  openDropdownKey = colKey;
+  openDropdownEl = btnEl;
+
+  // Build unique values from globalData (unfiltered for this col, filtered for others)
+  const otherFiltered = applyFiltersExcept(colKey);
+  const valuesMap = new Map();
+  otherFiltered.forEach(e => {
+    const raw = getEntryVal(e, colKey);
+    const label = String(raw);
+    valuesMap.set(label, (valuesMap.get(label) || 0) + 1);
+  });
+  const values = [...valuesMap.entries()].sort((a,b) => a[0].localeCompare(b[0], undefined, {numeric:true}));
+
+  const selected = globalColFilters[colKey] || new Set();
+  const dropdown = document.createElement('div');
+  dropdown.className = 'col-filter-dropdown';
+  dropdown.id = 'col-filter-dropdown';
+  dropdown.innerHTML = `
+    <input type="text" placeholder="Rechercher…" oninput="filterDropdownSearch(this,'${colKey}')" />
+    <div id="col-filter-list-${colKey}">
+      ${values.map(([val, count]) => `
+        <label class="col-filter-opt ${selected.has(val)?'selected':''}">
+          <input type="checkbox" value="${escHtml(val)}" ${selected.has(val)?'checked':''} onchange="toggleColFilterVal('${colKey}',this.value,this.checked)" />
+          <span>${escHtml(val)}</span>
+          <span style="margin-left:auto;color:var(--text-dim);font-size:0.75rem">${count}</span>
+        </label>`).join('')}
+    </div>
+    <div class="col-filter-actions">
+      <button class="btn btn-ghost btn-sm" onclick="clearColFilter('${colKey}')">Tout effacer</button>
+      <button class="btn btn-primary btn-sm" onclick="closeColFilterDropdown()">OK</button>
+    </div>`;
+
+  btnEl.parentElement.appendChild(dropdown);
+
+  // Close on outside click
+  setTimeout(() => document.addEventListener('click', outsideColFilterClick), 0);
+}
+
+function outsideColFilterClick(e) {
+  const dd = document.getElementById('col-filter-dropdown');
+  if (dd && !dd.contains(e.target) && e.target !== openDropdownEl) closeColFilterDropdown();
+}
+
+function closeColFilterDropdown() {
+  const dd = document.getElementById('col-filter-dropdown');
+  if (dd) dd.remove();
+  document.removeEventListener('click', outsideColFilterClick);
+  openDropdownKey = null;
+  openDropdownEl = null;
+}
+
+function filterDropdownSearch(input, colKey) {
+  const q = input.value.toLowerCase();
+  const list = document.getElementById(`col-filter-list-${colKey}`);
+  list.querySelectorAll('.col-filter-opt').forEach(opt => {
+    opt.style.display = opt.querySelector('span').textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function toggleColFilterVal(colKey, val, checked) {
+  if (!globalColFilters[colKey]) globalColFilters[colKey] = new Set();
+  if (checked) globalColFilters[colKey].add(val);
+  else globalColFilters[colKey].delete(val);
+  if (globalColFilters[colKey].size === 0) delete globalColFilters[colKey];
+  buildGlobalThead();
+  globalPage = 1;
+  applyGlobalFilters();
+}
+
+function clearColFilter(colKey) {
+  delete globalColFilters[colKey];
+  closeColFilterDropdown();
+  buildGlobalThead();
+  globalPage = 1;
+  applyGlobalFilters();
+}
+
+// Apply all filters EXCEPT one column (used to populate its dropdown with live counts)
+function applyFiltersExcept(exceptKey) {
+  return applyBarFilters(globalData).filter(e => {
+    return GLOBAL_COLS.filter(c => c.filterable && c.key !== exceptKey).every(col => {
+      const set = globalColFilters[col.key];
+      if (!set || set.size === 0) return true;
+      return set.has(String(getEntryVal(e, col.key)));
+    });
+  });
+}
+
+function applyBarFilters(data) {
   const comp    = document.getElementById('g-comp').value;
   const cat     = document.getElementById('g-cat').value;
   const seg     = document.getElementById('g-seg').value;
@@ -1144,30 +1355,51 @@ function applyGlobalFilters() {
   const name    = document.getElementById('g-name').value.trim().toLowerCase();
   const scoreMin = parseFloat(document.getElementById('g-score-min').value) || 0;
   const scoreMax = parseFloat(document.getElementById('g-score-max').value) || Infinity;
-
-  let filtered = globalData.filter(e => {
+  return data.filter(e => {
     const compLabel = e.cs?.comp?.long_name || e.cs?.comp?.short_name;
     if (comp && compLabel !== comp) return false;
     if (cat  && e.cs?.nom_categorie !== cat) return false;
     if (seg  && e.cs?.nom_segment !== seg) return false;
     if (nat  && !((e.s1?.nation||'').startsWith(nat))) return false;
-    if (name) {
-      const full = skaterName(e).toLowerCase();
-      if (!full.includes(name)) return false;
-    }
+    if (name && !skaterName(e).toLowerCase().includes(name)) return false;
     const score = e.total_segment_score || 0;
     if (score < scoreMin || score > scoreMax) return false;
     return true;
   });
+}
 
+function applyGlobalFilters() {
+  let filtered = applyBarFilters(globalData);
+
+  // Apply column filters
+  GLOBAL_COLS.filter(c => c.filterable).forEach(col => {
+    const set = globalColFilters[col.key];
+    if (!set || set.size === 0) return;
+    filtered = filtered.filter(e => set.has(String(getEntryVal(e, col.key))));
+  });
+
+  globalFiltered = filtered;
   globalPage = 1;
   document.getElementById('global-count').textContent = `${filtered.length} performance${filtered.length>1?'s':''} affichée${filtered.length>1?'s':''}`;
+  buildGlobalThead();
   renderGlobalTable(filtered);
 }
 
 function renderGlobalTable(data) {
+  // Apply sort
+  let sorted = [...data];
+  if (globalSort.col) {
+    const dir = globalSort.dir === 'asc' ? 1 : -1;
+    sorted.sort((a, b) => {
+      const va = getEntryVal(a, globalSort.col);
+      const vb = getEntryVal(b, globalSort.col);
+      if (typeof va === 'number') return (va - vb) * dir;
+      return String(va).localeCompare(String(vb), undefined, {numeric:true}) * dir;
+    });
+  }
+
   const start = (globalPage-1)*PAGE_SIZE;
-  const page  = data.slice(start, start+PAGE_SIZE);
+  const page  = sorted.slice(start, start+PAGE_SIZE);
   const tbody = document.getElementById('global-tbody');
   const admin = isAdmin;
   const colspan = 12;
@@ -1201,7 +1433,7 @@ function renderGlobalTable(data) {
   }).join('');
 
   // Pagination
-  const totalPages = Math.ceil(data.length/PAGE_SIZE);
+  const totalPages = Math.ceil(sorted.length/PAGE_SIZE);
   const pag = document.getElementById('global-pagination');
   pag.innerHTML = '';
   if (totalPages <= 1) return;
@@ -1217,6 +1449,9 @@ function renderGlobalTable(data) {
 function resetGlobalFilters() {
   ['g-comp','g-cat','g-seg'].forEach(id => document.getElementById(id).value = '');
   ['g-nat','g-name','g-score-min','g-score-max'].forEach(id => document.getElementById(id).value = '');
+  globalColFilters = {};
+  globalSort = { col: null, dir: 'asc' };
+  buildGlobalThead();
   applyGlobalFilters();
 }
 
