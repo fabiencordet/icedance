@@ -795,24 +795,69 @@ function initSupabase() {
 }
 
 async function boot() {
+  // Diagnostic : vérifier que config.js est bien chargé
+  if (typeof CONFIG === 'undefined') {
+    showDiagBanner('error', '⚠️ Fichier config.js introuvable — vérifiez qu\'il est bien présent sur le serveur dans le même dossier que index.html.');
+    return;
+  }
+
   // Pré-remplir les champs config
   if (document.getElementById('cfg-url')) document.getElementById('cfg-url').value = SUPABASE_URL !== 'VOTRE_URL_SUPABASE' ? SUPABASE_URL : '';
   if (document.getElementById('cfg-key')) document.getElementById('cfg-key').value = SUPABASE_KEY !== 'VOTRE_CLE_ANON_SUPABASE' ? SUPABASE_KEY : '';
   if (GEMINI_KEY && document.getElementById('gemini-key')) document.getElementById('gemini-key').value = GEMINI_KEY;
 
-  // L'app est toujours visible — on démarre en mode visiteur par défaut
-  initAsGuest();
+  if (!initSupabase()) {
+    showDiagBanner('error', '⚠️ Supabase non configuré — URL ou clé manquante dans config.js.');
+    initAsGuestNoLoad();
+    return;
+  }
 
-  if (!initSupabase()) return;
+  // Test de connexion réel avant d'afficher quoi que ce soit
+  try {
+    const { error: pingErr } = await sb.from('competitions').select('id', { count: 'exact', head: true });
+    if (pingErr) {
+      showDiagBanner('error', `⚠️ Connexion Supabase échouée : ${pingErr.message} — vérifiez l'URL et la clé anon dans config.js.`);
+      initAsGuestNoLoad();
+      return;
+    }
+  } catch(e) {
+    showDiagBanner('error', `⚠️ Impossible de joindre Supabase : ${e.message}`);
+    initAsGuestNoLoad();
+    return;
+  }
+
+  // Connexion OK — démarrage normal
+  initAsGuest();
 
   // Si une session admin est déjà active (cookie), on la restaure silencieusement
   const { data: { session } } = await sb.auth.getSession();
   if (session && session.user?.user_metadata?.role === 'admin') {
     await setUser(session.user);
   } else if (session) {
-    // Session non-admin : on la ferme et on reste visiteur
     await sb.auth.signOut();
   }
+}
+
+function showDiagBanner(type, msg) {
+  const existing = document.getElementById('diag-banner');
+  if (existing) existing.remove();
+  const banner = document.createElement('div');
+  banner.id = 'diag-banner';
+  banner.style.cssText = `position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);z-index:9999;
+    max-width:90vw;padding:0.9rem 1.2rem;border-radius:10px;font-size:0.85rem;
+    background:${type==='error'?'rgba(224,92,92,0.95)':'rgba(76,175,135,0.95)'};
+    color:white;box-shadow:0 4px 20px rgba(0,0,0,0.4);display:flex;align-items:center;gap:0.8rem`;
+  banner.innerHTML = `<span>${msg}</span><button onclick="this.parentElement.remove()" style="background:none;border:none;color:white;font-size:1.1rem;cursor:pointer;flex-shrink:0">✕</button>`;
+  document.body.appendChild(banner);
+}
+
+// initAsGuest sans déclencher les loadXxx (utilisé quand Supabase est KO)
+function initAsGuestNoLoad() {
+  currentUser = null; isAdmin = false;
+  document.getElementById('user-badge').style.display = 'none';
+  document.getElementById('btn-admin-login').style.display = 'inline-flex';
+  document.getElementById('btn-logout').style.display = 'none';
+  document.getElementById('nav-admin').style.display = 'none';
 }
 
 async function setUser(user) {
