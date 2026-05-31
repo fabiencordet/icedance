@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>IceStats — Analyse de Patinage Artistique</title>
 
+  <!-- Config (à modifier, même dossier que index.html) -->
+  <script src="config.js"></script>
   <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -749,9 +751,9 @@
 // CONFIG — Remplacez ces valeurs par les vôtres
 // (ou utilisez l'onglet Paramètres dans l'admin)
 // ============================================================
-let SUPABASE_URL = localStorage.getItem('sb_url') || 'https://wsrqqffczkthpljvocql.supabase.co';
-let SUPABASE_KEY = localStorage.getItem('sb_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzcnFxZmZjemt0aHBsanZvY3FsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjY1NDUsImV4cCI6MjA5NTgwMjU0NX0.-_rAFqx8dCQ-IOOTDuz2XVkOM2UxYeYMU8DkHBiEhC0';
-let GEMINI_KEY   = localStorage.getItem('gemini_key') || '';
+let SUPABASE_URL = localStorage.getItem('sb_url') || CONFIG.SUPABASE_URL;
+let SUPABASE_KEY = localStorage.getItem('sb_key') || CONFIG.SUPABASE_KEY;
+let GEMINI_KEY   = localStorage.getItem('gemini_key') || CONFIG.GEMINI_KEY || '';
 
 let sb = null;
 let currentUser = null;
