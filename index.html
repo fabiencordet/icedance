@@ -330,6 +330,17 @@
     .progress-bar { height: 4px; background: var(--navy-light); border-radius: 2px; overflow: hidden; margin-top: 0.5rem; }
     .progress-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-light)); transition: width 0.3s; }
 
+    /* ===== IMAGE UPLOAD ===== */
+    .img-upload-zone {
+      border: 2px dashed var(--border); border-radius: var(--radius-sm);
+      padding: 1.2rem; text-align: center; cursor: pointer;
+      transition: all 0.2s; position: relative; background: rgba(255,255,255,0.02);
+    }
+    .img-upload-zone:hover { border-color: var(--gold); background: rgba(201,168,76,0.04); }
+    .img-upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .img-preview { width: 100%; max-height: 160px; object-fit: cover; border-radius: var(--radius-sm); margin-top: 0.6rem; display: none; }
+    .comp-thumb { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; vertical-align: middle; }
+
     /* toggle sections */
     details > summary { cursor: pointer; list-style: none; }
     details > summary::after { content: ' ▶'; font-size: 0.7rem; color: var(--text-dim); }
@@ -685,7 +696,7 @@
             <div class="card-title">🏟 Compétitions</div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Nom</th><th>Date</th><th>Lieu</th><th></th></tr></thead>
+                <thead><tr><th>Image</th><th>Nom</th><th>Date</th><th>Lieu</th><th></th></tr></thead>
                 <tbody id="manage-comp-tbody">
                   <tr class="loading-row"><td colspan="4"><div class="spinner"></div></td></tr>
                 </tbody>
@@ -697,7 +708,7 @@
             <div class="form-group"><input class="form-control" id="manage-sk-search" placeholder="Chercher un patineur…" oninput="loadManageSkaters()" /></div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Nom</th><th>Nation</th><th></th></tr></thead>
+                <thead><tr><th>Nom</th><th>Nation</th><th>Genre</th><th></th></tr></thead>
                 <tbody id="manage-sk-tbody">
                   <tr class="loading-row"><td colspan="3"><div class="spinner"></div></td></tr>
                 </tbody>
@@ -735,6 +746,14 @@
     </div>
 
   </main>
+</div>
+
+<!-- ===== EDIT MODAL ===== -->
+<div id="edit-modal" class="modal-backdrop" style="display:none">
+  <div class="modal" style="max-width:560px">
+    <button class="modal-close" onclick="closeEditModal()">✕</button>
+    <div id="edit-modal-content"></div>
+  </div>
 </div>
 
 <!-- ===== DETAIL MODAL ===== -->
@@ -1299,12 +1318,16 @@ async function loadManageComps() {
   if (!sb) return;
   const { data } = await sb.from('competitions').select('*').order('date_debut',{ascending:false});
   const tbody = document.getElementById('manage-comp-tbody');
-  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="4"><div class="empty"><p>Aucune compétition</p></div></td></tr>'; return; }
+  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="5"><div class="empty"><p>Aucune compétition</p></div></td></tr>'; return; }
   tbody.innerHTML = data.map(c => `<tr>
-    <td><strong>${c.short_name}</strong><br><small style="color:var(--text-dim)">${c.long_name}</small></td>
+    <td>${c.image_url ? `<img class="comp-thumb" src="${escHtml(c.image_url)}" alt="" onerror="this.style.display='none'">` : '<span style="color:var(--text-dim);font-size:1.1rem">🏟</span>'}</td>
+    <td><strong>${c.short_name}</strong><br><small style="color:var(--text-dim)">${c.long_name||''}</small></td>
     <td>${c.date_debut||'—'}</td>
     <td>${c.lieu||'—'}</td>
-    <td><button class="btn btn-danger btn-sm" onclick="deleteRecord('competitions',${c.id},'manage-comp-tbody',loadManageComps)">🗑</button></td>
+    <td style="display:flex;gap:0.4rem">
+      <button class="btn btn-secondary btn-sm" onclick="openEditComp(${c.id})">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteRecord('competitions',${c.id},'manage-comp-tbody',loadManageComps)">🗑</button>
+    </td>
   </tr>`).join('');
 }
 
@@ -1315,12 +1338,187 @@ async function loadManageSkaters() {
   if (q) query = query.or(`nom.ilike.%${q}%,prenom.ilike.%${q}%`);
   const { data } = await query.limit(50);
   const tbody = document.getElementById('manage-sk-tbody');
-  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="3"><div class="empty"><p>Aucun patineur</p></div></td></tr>'; return; }
+  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="4"><div class="empty"><p>Aucun patineur</p></div></td></tr>'; return; }
+  const genreLabel = g => g === 'F' ? '♀ F' : g === 'M' ? '♂ M' : g || '—';
   tbody.innerHTML = data.map(s => `<tr>
     <td><strong>${s.prenom} ${s.nom}</strong></td>
     <td><span class="nation-tag">${s.nation||'?'}</span></td>
-    <td><button class="btn btn-danger btn-sm" onclick="deleteRecord('skaters',${s.id},'manage-sk-tbody',loadManageSkaters)">🗑</button></td>
+    <td>${genreLabel(s.genre)}</td>
+    <td style="display:flex;gap:0.4rem">
+      <button class="btn btn-secondary btn-sm" onclick="openEditSkater(${s.id})">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteRecord('skaters',${s.id},'manage-sk-tbody',loadManageSkaters)">🗑</button>
+    </td>
   </tr>`).join('');
+}
+
+// ============================================================
+// ADMIN — EDIT MODAL
+// ============================================================
+function closeEditModal() {
+  document.getElementById('edit-modal').style.display = 'none';
+  document.getElementById('edit-modal-content').innerHTML = '';
+}
+document.getElementById('edit-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('edit-modal')) closeEditModal();
+});
+
+async function openEditComp(id) {
+  const { data: c } = await sb.from('competitions').select('*').eq('id', id).single();
+  if (!c) return;
+  const content = document.getElementById('edit-modal-content');
+  content.innerHTML = `
+    <h2 class="modal-title">✏️ Modifier la compétition</h2>
+    <div class="form-group"><label>Nom court</label><input class="form-control" id="ec-short" value="${c.short_name||''}" /></div>
+    <div class="form-group"><label>Nom complet</label><input class="form-control" id="ec-long" value="${c.long_name||''}" /></div>
+    <div class="form-row form-row-2">
+      <div class="form-group"><label>Date début</label><input class="form-control" type="date" id="ec-deb" value="${c.date_debut||''}" /></div>
+      <div class="form-group"><label>Date fin</label><input class="form-control" type="date" id="ec-fin" value="${c.date_fin||''}" /></div>
+    </div>
+    <div class="form-group"><label>Lieu</label><input class="form-control" id="ec-lieu" value="${c.lieu||''}" /></div>
+    <div class="form-group">
+      <label>Image de la compétition</label>
+      <div class="img-upload-zone" id="ec-upload-zone">
+        <input type="file" accept="image/*" onchange="previewCompImage(event)" />
+        <div id="ec-upload-label">
+          <div style="font-size:1.8rem;margin-bottom:0.4rem">🖼</div>
+          <div style="color:var(--text-dim);font-size:0.85rem"><strong style="color:var(--text)">Glissez une image</strong> ou cliquez pour choisir</div>
+          <div style="font-size:0.75rem;color:var(--text-dim);margin-top:0.2rem">JPG, PNG, WebP — max 5 Mo</div>
+        </div>
+        ${c.image_url ? `<img id="ec-img-preview" class="img-preview" src="${c.image_url}" style="display:block" />` : '<img id="ec-img-preview" class="img-preview" />'}
+      </div>
+      ${c.image_url ? `<div style="margin-top:0.5rem;display:flex;align-items:center;gap:0.6rem"><span style="font-size:0.8rem;color:var(--text-dim)">Image actuelle</span><button class="btn btn-danger btn-sm" onclick="removeCompImage(${id})">✕ Supprimer</button></div>` : ''}
+    </div>
+    <div id="ec-upload-progress" style="display:none;margin-bottom:0.8rem">
+      <div style="display:flex;align-items:center;gap:0.6rem;color:var(--text-dim);font-size:0.85rem">
+        <div class="spinner"></div><span id="ec-upload-status">Upload en cours…</span>
+      </div>
+      <div class="progress-bar" style="margin-top:0.5rem"><div class="progress-fill" id="ec-upload-fill" style="width:0%"></div></div>
+    </div>
+    <div id="edit-comp-msg" class="alert" style="display:none;margin-bottom:0.8rem"></div>
+    <div style="display:flex;gap:0.6rem;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeEditModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveEditComp(${id})">💾 Enregistrer</button>
+    </div>
+  `;
+  // Store current image URL for reference
+  document.getElementById('edit-modal').dataset.currentImageUrl = c.image_url || '';
+  document.getElementById('edit-modal').dataset.pendingImageUrl = '';
+  document.getElementById('edit-modal').style.display = 'flex';
+}
+
+function previewCompImage(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { alert('Image trop lourde (max 5 Mo)'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = document.getElementById('ec-img-preview');
+    img.src = e.target.result;
+    img.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+  // Store file reference for upload on save
+  document.getElementById('edit-modal').dataset.pendingFile = 'yes';
+  document.getElementById('edit-modal')._pendingFile = file;
+}
+
+async function saveEditComp(id) {
+  const modal = document.getElementById('edit-modal');
+  const btn = document.querySelector('#edit-modal-content .btn-primary');
+  btn.disabled = true;
+
+  let imageUrl = modal.dataset.currentImageUrl;
+
+  // Upload image if pending
+  if (modal._pendingFile) {
+    const file = modal._pendingFile;
+    const progress = document.getElementById('ec-upload-progress');
+    const fill = document.getElementById('ec-upload-fill');
+    const status = document.getElementById('ec-upload-status');
+    progress.style.display = 'block';
+    fill.style.width = '30%'; status.textContent = 'Upload de l\'image…';
+
+    const ext = file.name.split('.').pop();
+    const path = `competitions/${id}/cover_${Date.now()}.${ext}`;
+    const { data: upData, error: upErr } = await sb.storage.from('competition-images').upload(path, file, { upsert: true });
+    if (upErr) {
+      showMsg('edit-comp-msg','alert-error','Erreur upload image : ' + upErr.message);
+      btn.disabled = false; progress.style.display = 'none'; return;
+    }
+    fill.style.width = '80%'; status.textContent = 'Récupération de l\'URL…';
+    const { data: urlData } = sb.storage.from('competition-images').getPublicUrl(upData.path);
+    imageUrl = urlData.publicUrl;
+    fill.style.width = '100%';
+    setTimeout(() => { progress.style.display = 'none'; }, 500);
+  }
+
+  const payload = {
+    short_name: document.getElementById('ec-short').value.trim(),
+    long_name: document.getElementById('ec-long').value.trim(),
+    date_debut: document.getElementById('ec-deb').value || null,
+    date_fin: document.getElementById('ec-fin').value || null,
+    lieu: document.getElementById('ec-lieu').value.trim(),
+    image_url: imageUrl || null
+  };
+  if (!payload.short_name) { showMsg('edit-comp-msg','alert-error','Le nom court est obligatoire'); btn.disabled = false; return; }
+
+  const { error } = await sb.from('competitions').update(payload).eq('id', id);
+  if (error) { showMsg('edit-comp-msg','alert-error',error.message); btn.disabled = false; return; }
+
+  closeEditModal();
+  loadManageComps();
+  loadCompetitionsDropdowns();
+}
+
+async function removeCompImage(id) {
+  if (!confirm('Supprimer l\'image de cette compétition ?')) return;
+  const { error } = await sb.from('competitions').update({ image_url: null }).eq('id', id);
+  if (error) { alert(error.message); return; }
+  openEditComp(id); // refresh modal
+  loadManageComps();
+}
+
+async function openEditSkater(id) {
+  const { data: s } = await sb.from('skaters').select('*').eq('id', id).single();
+  if (!s) return;
+  const content = document.getElementById('edit-modal-content');
+  content.innerHTML = `
+    <h2 class="modal-title">✏️ Modifier le patineur</h2>
+    <div class="form-row form-row-2">
+      <div class="form-group"><label>Nom</label><input class="form-control" id="es-nom" value="${s.nom||''}" /></div>
+      <div class="form-group"><label>Prénom</label><input class="form-control" id="es-prenom" value="${s.prenom||''}" /></div>
+    </div>
+    <div class="form-row form-row-2">
+      <div class="form-group"><label>Nation</label><input class="form-control" id="es-nation" value="${s.nation||''}" maxlength="3" style="text-transform:uppercase" /></div>
+      <div class="form-group"><label>Genre</label>
+        <select class="form-control" id="es-genre">
+          <option value="F" ${s.genre==='F'?'selected':''}>Féminin</option>
+          <option value="M" ${s.genre==='M'?'selected':''}>Masculin</option>
+          <option value="X" ${s.genre==='X'?'selected':''}>Autre</option>
+        </select>
+      </div>
+    </div>
+    <div id="edit-sk-msg" class="alert" style="display:none;margin-bottom:0.8rem"></div>
+    <div style="display:flex;gap:0.6rem;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeEditModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveEditSkater(${id})">💾 Enregistrer</button>
+    </div>
+  `;
+  document.getElementById('edit-modal').style.display = 'flex';
+}
+
+async function saveEditSkater(id) {
+  const payload = {
+    nom: document.getElementById('es-nom').value.trim().toUpperCase(),
+    prenom: document.getElementById('es-prenom').value.trim(),
+    nation: document.getElementById('es-nation').value.trim().toUpperCase(),
+    genre: document.getElementById('es-genre').value
+  };
+  if (!payload.nom || !payload.prenom) { showMsg('edit-sk-msg','alert-error','Nom et prénom obligatoires'); return; }
+  const { error } = await sb.from('skaters').update(payload).eq('id', id);
+  if (error) { showMsg('edit-sk-msg','alert-error',error.message); return; }
+  closeEditModal();
+  loadManageSkaters();
 }
 
 async function deleteRecord(table, id, tbodyId, reloadFn) {
