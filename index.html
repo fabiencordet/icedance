@@ -336,18 +336,17 @@
     #global-thead th { font-size: 0.7rem; }
     .global-table-wrap { overflow-x: auto; }
     .global-table-wrap table { width: 100%; table-layout: fixed; }
-    .global-table-wrap th:nth-child(1)  { width: 160px; } /* Patineur */
-    .global-table-wrap th:nth-child(2)  { width: 52px;  } /* Nation */
-    .global-table-wrap th:nth-child(3)  { width: 48px;  } /* Année */
-    .global-table-wrap th:nth-child(4)  { width: 140px; } /* Compétition */
-    .global-table-wrap th:nth-child(5)  { width: 68px;  } /* Saison */
-    .global-table-wrap th:nth-child(6)  { width: 110px; } /* Catégorie */
-    .global-table-wrap th:nth-child(7)  { width: 46px;  } /* Segment */
-    .global-table-wrap th:nth-child(8)  { width: 74px;  } /* Score total */
-    .global-table-wrap th:nth-child(9)  { width: 64px;  } /* Éléments */
-    .global-table-wrap th:nth-child(10) { width: 74px;  } /* Composantes */
-    .global-table-wrap th:nth-child(11) { width: 64px;  } /* Déductions */
-    .global-table-wrap th:nth-child(12) { width: 100px; } /* Actions */
+    .global-table-wrap th:nth-child(1)  { width: 170px; } /* Patineur */
+    .global-table-wrap th:nth-child(2)  { width: 56px;  } /* Nation */
+    .global-table-wrap th:nth-child(3)  { width: 160px; } /* Compétition */
+    .global-table-wrap th:nth-child(4)  { width: 72px;  } /* Saison */
+    .global-table-wrap th:nth-child(5)  { width: 120px; } /* Catégorie */
+    .global-table-wrap th:nth-child(6)  { width: 50px;  } /* Segment */
+    .global-table-wrap th:nth-child(7)  { width: 80px;  } /* Score total */
+    .global-table-wrap th:nth-child(8)  { width: 68px;  } /* Éléments */
+    .global-table-wrap th:nth-child(9)  { width: 80px;  } /* Composantes */
+    .global-table-wrap th:nth-child(10) { width: 68px;  } /* Déductions */
+    .global-table-wrap th:nth-child(11) { width: 100px; } /* Actions */
     .global-table-wrap td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     /* ===== PROGRESS BAR ===== */
@@ -1236,7 +1235,6 @@ let globalFiltered = []; // last filtered result (before sort)
 const GLOBAL_COLS = [
   { key: 'skater',    label: 'Patineur(s)',  sortable: true,  filterable: true  },
   { key: 'nation',    label: 'Nation',       sortable: true,  filterable: true  },
-  { key: 'annee',     label: 'Année',        sortable: true,  filterable: true  },
   { key: 'comp',      label: 'Compétition',  sortable: true,  filterable: true  },
   { key: 'saison',    label: 'Saison',       sortable: true,  filterable: true  },
   { key: 'categorie', label: 'Catégorie',    sortable: true,  filterable: true  },
@@ -1449,12 +1447,11 @@ function renderGlobalTable(data) {
   const page  = sorted.slice(start, start+PAGE_SIZE);
   const tbody = document.getElementById('global-tbody');
   const admin = isAdmin;
-  const colspan = 12;
+  const colspan = 11;
   if (!page.length) { tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty"><div class="empty-icon">🔍</div><p>Aucune performance correspond aux filtres</p></div></td></tr>`; return; }
 
   tbody.innerHTML = page.map(e => {
     const compLabel = e.cs?.comp?.long_name || e.cs?.comp?.short_name || '—';
-    const annee = e.cs?.comp?.date_debut ? new Date(e.cs.comp.date_debut).getFullYear() : '—';
     const saison = getSaison(e.cs?.comp?.date_debut);
     const actions = admin
       ? `<div style="display:flex;gap:0.3rem;justify-content:flex-end">
@@ -1466,7 +1463,6 @@ function renderGlobalTable(data) {
     return `<tr>
       <td><strong>${skaterName(e)}</strong></td>
       <td><span class="nation-tag">${e.s1?.nation||'—'}</span></td>
-      <td style="color:var(--text-dim)">${annee}</td>
       <td style="max-width:180px;white-space:normal;line-height:1.3">${compLabel}</td>
       <td><span class="badge badge-gold" style="font-size:0.72rem">${saison}</span></td>
       <td>${e.cs?.nom_categorie||'—'}</td>
