@@ -714,9 +714,7 @@
             <div class="form-group">
               <label>Segment</label>
               <select class="form-control" id="m-entry-seg">
-                <option value="FREE DANCE">FREE — Programme libre</option>
-                <option value="PD Valse Willow">VALSE WILLOW — Danse imposée Valse Willow</option>
-                <option value="PD Rhythm Blues">RHYTHM BLUES — Danse imposée Rhythm Blues</option>
+                <option value="">— Choisir —</option>
               </select>
             </div>
           </div>
@@ -882,6 +880,10 @@ async function boot() {
   if (document.getElementById('cfg-url')) document.getElementById('cfg-url').value = SUPABASE_URL !== 'VOTRE_URL_SUPABASE' ? SUPABASE_URL : '';
   if (document.getElementById('cfg-key')) document.getElementById('cfg-key').value = SUPABASE_KEY !== 'VOTRE_CLE_ANON_SUPABASE' ? SUPABASE_KEY : '';
   if (GEMINI_KEY && document.getElementById('gemini-key')) document.getElementById('gemini-key').value = GEMINI_KEY;
+
+  // Peupler le select segment (saisie manuelle)
+  const segSel = document.getElementById('m-entry-seg');
+  if (segSel) SEGMENTS.forEach(s => segSel.add(new Option(s, s)));
 
   if (!initSupabase()) {
     showDiagBanner('error', '⚠️ Supabase non configuré — URL ou clé manquante dans config.js.');
@@ -1223,6 +1225,45 @@ function fillSelect(id, items) {
 
 // ============================================================
 // GLOBAL TABLE — SORT & COLUMN FILTERS
+// ============================================================
+// SEGMENTS LIST
+// ============================================================
+const SEGMENTS = [
+  'Free dance',
+  'Pattern dance : American Waltz',
+  'Pattern dance : Argentine Tango',
+  'Pattern dance : Austrian Waltz',
+  'Pattern dance : Blues',
+  'Pattern dance : Cha Cha',
+  'Pattern dance : Cha Cha Congelado',
+  'Pattern dance : Dutch Waltz',
+  'Pattern dance : European Waltz',
+  'Pattern dance : Finnstep',
+  'Pattern dance : Foxtrot',
+  'Pattern dance : Golden Waltz',
+  'Pattern dance : Hickory Hoedown',
+  'Pattern dance : Kilian',
+  'Pattern dance : Midnight Blues',
+  'Pattern dance : Paso Doble',
+  'Pattern dance : Quickstep',
+  'Pattern dance : Ravensburger Waltz',
+  'Pattern dance : Rhumba',
+  'Pattern dance : Rocker Foxtrot',
+  'Pattern dance : Silver Samba',
+  'Pattern dance : Starlight Waltz',
+  'Pattern dance : Tango',
+  'Pattern dance : Tango Canasta',
+  'Pattern dance : Tango Romantica',
+  'Pattern dance : Tea-Time Foxtrot',
+  'Pattern dance : Ten-Fox',
+  'Pattern dance : Fourteenstep',
+  'Pattern dance : Viennese Waltz',
+  'Pattern dance : Waltz (Fiesta Tango)',
+  'Pattern dance : Westminster Waltz',
+  'Pattern dance : Willow Waltz',
+  'Pattern dance : Yankee Polka',
+];
+
 // ============================================================
 let globalSort = { col: null, dir: 'asc' };
 let globalColFilters = {}; // { colKey: Set of selected values }
@@ -1975,7 +2016,7 @@ async function openEditCatSeg(id) {
     <div class="form-group">
       <label>Segment</label>
       <select class="form-control" id="ecs-seg">
-        ${['FREE DANCE','PD Valse Willow','PD Rhythm Blues','PD','FD'].map(s => `<option value="${s}" ${cs.nom_segment===s?'selected':''}>${s}</option>`).join('')}
+        ${SEGMENTS.map(s => `<option value="${escHtml(s)}" ${cs.nom_segment===s?'selected':''}>${escHtml(s)}</option>`).join('')}
       </select>
     </div>
     <div id="edit-cs-msg" class="alert" style="display:none;margin-bottom:0.8rem"></div>
@@ -2235,7 +2276,7 @@ Extrais TOUTES les données et retourne UNIQUEMENT un JSON valide avec cette str
     "lieu": "string or null"
   },
   "nom_categorie": "string (ex: Senior Ladies, Junior Men, Ice Dance...)",
-  "nom_segment": "string (FREE DANCE, PD Valse Willow, PD Rhythm Blues, PD, FD)",
+  "nom_segment": "string (Free dance, Pattern dance : American Waltz, Pattern dance : Argentine Tango, etc.)",
   "entries": [
     {
       "rank": number,
