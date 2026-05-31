@@ -526,13 +526,13 @@
           <table>
             <thead>
               <tr>
-                <th>Rang</th><th>Patineur(s)</th><th>Nation</th><th>Compétition</th>
-                <th>Catégorie</th><th>Segment</th><th>Score total</th>
-                <th>Éléments</th><th>Composantes</th><th>Déductions</th><th>Détail</th>
+                <th>Patineur(s)</th><th>Nation</th><th>Année</th><th>Compétition</th>
+                <th>Saison</th><th>Catégorie</th><th>Segment</th><th>Score total</th>
+                <th>Éléments</th><th>Composantes</th><th>Déductions</th><th></th>
               </tr>
             </thead>
             <tbody id="global-tbody">
-              <tr class="loading-row"><td colspan="11"><div class="spinner"></div></td></tr>
+              <tr class="loading-row"><td colspan="12"><div class="spinner"></div></td></tr>
             </tbody>
           </table>
         </div>
@@ -1101,15 +1101,28 @@ async function loadGlobalData() {
   const { data } = await sb.from('entries')
     .select(`id,rank,starting_number,total_segment_score,total_element_score,total_component_score,total_deductions,
       s1:skater_1_id(nom,prenom,nation), s2:skater_2_id(nom,prenom,nation),
-      cs:category_segment_id(nom_categorie,nom_segment,comp:competition_id(short_name,date_debut,lieu))`)
+      cs:category_segment_id(nom_categorie,nom_segment,comp:competition_id(short_name,long_name,date_debut,lieu))`)
     .order('id',{ascending:false}).limit(2000);
   globalData = data || [];
   populateGlobalFilters();
   applyGlobalFilters();
 }
 
+// Calcule la saison (sep→août) à partir d'une date ISO
+function getSaison(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  const y = d.getFullYear();
+  const m = d.getMonth(); // 0=jan … 8=sep
+  const start = m >= 8 ? y : y - 1;
+  return `${start}/${String(start+1).slice(2)}`;
+}
+
 function populateGlobalFilters() {
-  const comps = [...new Map(globalData.map(e=>[e.cs?.comp?.short_name, e.cs?.comp?.short_name])).values()].filter(Boolean).sort();
+  const comps = [...new Map(globalData.map(e => {
+    const key = e.cs?.comp?.long_name || e.cs?.comp?.short_name;
+    return [key, key];
+  })).values()].filter(Boolean).sort();
   const cats  = [...new Set(globalData.map(e=>e.cs?.nom_categorie).filter(Boolean))].sort();
   const segs  = [...new Set(globalData.map(e=>e.cs?.nom_segment).filter(Boolean))].sort();
   fillSelect('g-comp', comps); fillSelect('g-cat', cats); fillSelect('g-seg', segs);
@@ -1133,7 +1146,8 @@ function applyGlobalFilters() {
   const scoreMax = parseFloat(document.getElementById('g-score-max').value) || Infinity;
 
   let filtered = globalData.filter(e => {
-    if (comp && e.cs?.comp?.short_name !== comp) return false;
+    const compLabel = e.cs?.comp?.long_name || e.cs?.comp?.short_name;
+    if (comp && compLabel !== comp) return false;
     if (cat  && e.cs?.nom_categorie !== cat) return false;
     if (seg  && e.cs?.nom_segment !== seg) return false;
     if (nat  && !((e.s1?.nation||'').startsWith(nat))) return false;
@@ -1155,21 +1169,36 @@ function renderGlobalTable(data) {
   const start = (globalPage-1)*PAGE_SIZE;
   const page  = data.slice(start, start+PAGE_SIZE);
   const tbody = document.getElementById('global-tbody');
-  if (!page.length) { tbody.innerHTML = '<tr><td colspan="11"><div class="empty"><div class="empty-icon">🔍</div><p>Aucune performance correspond aux filtres</p></div></td></tr>'; return; }
-  tbody.innerHTML = page.map(e => `
-    <tr>
-      <td><span class="rank-badge ${getRankClass(e.rank)}">${e.rank||'—'}</span></td>
+  const admin = isAdmin;
+  const colspan = 12;
+  if (!page.length) { tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty"><div class="empty-icon">🔍</div><p>Aucune performance correspond aux filtres</p></div></td></tr>`; return; }
+
+  tbody.innerHTML = page.map(e => {
+    const compLabel = e.cs?.comp?.long_name || e.cs?.comp?.short_name || '—';
+    const annee = e.cs?.comp?.date_debut ? new Date(e.cs.comp.date_debut).getFullYear() : '—';
+    const saison = getSaison(e.cs?.comp?.date_debut);
+    const actions = admin
+      ? `<div style="display:flex;gap:0.3rem;justify-content:flex-end">
+           <button class="btn btn-ghost btn-sm" title="Détail" onclick="showDetail(${e.id})">🔍</button>
+           <button class="btn btn-secondary btn-sm" title="Éditer" onclick="openEditEntry(${e.id})">✏️</button>
+           <button class="btn btn-danger btn-sm" title="Supprimer" onclick="deleteEntry(${e.id})">🗑</button>
+         </div>`
+      : `<button class="btn btn-ghost btn-sm" onclick="showDetail(${e.id})">🔍</button>`;
+    return `<tr>
       <td><strong>${skaterName(e)}</strong></td>
       <td><span class="nation-tag">${e.s1?.nation||'—'}</span></td>
-      <td>${e.cs?.comp?.short_name||'—'}</td>
+      <td style="color:var(--text-dim)">${annee}</td>
+      <td style="max-width:180px;white-space:normal;line-height:1.3">${compLabel}</td>
+      <td><span class="badge badge-gold" style="font-size:0.72rem">${saison}</span></td>
       <td>${e.cs?.nom_categorie||'—'}</td>
       <td><span class="badge badge-ice">${e.cs?.nom_segment||'—'}</span></td>
       <td class="score-highlight">${fmt(e.total_segment_score)}</td>
       <td>${fmt(e.total_element_score)}</td>
       <td>${fmt(e.total_component_score)}</td>
       <td>${e.total_deductions ? '-'+fmt(e.total_deductions) : '0.00'}</td>
-      <td><button class="btn btn-ghost btn-sm" onclick="showDetail(${e.id})">Détail</button></td>
-    </tr>`).join('');
+      <td>${actions}</td>
+    </tr>`;
+  }).join('');
 
   // Pagination
   const totalPages = Math.ceil(data.length/PAGE_SIZE);
@@ -1192,8 +1221,71 @@ function resetGlobalFilters() {
 }
 
 // ============================================================
-// DETAIL MODAL
+// ADMIN — EDIT / DELETE ENTRY (tableau global)
 // ============================================================
+async function openEditEntry(id) {
+  const { data: e } = await sb.from('entries')
+    .select(`id,rank,starting_number,total_segment_score,total_element_score,total_component_score,total_deductions,
+      s1:skater_1_id(nom,prenom,nation), s2:skater_2_id(nom,prenom,nation),
+      cs:category_segment_id(nom_categorie,nom_segment,comp:competition_id(long_name,short_name,date_debut))`)
+    .eq('id', id).single();
+  if (!e) return;
+
+  const skName = skaterName(e);
+  const compLabel = e.cs?.comp?.long_name || e.cs?.comp?.short_name || '—';
+
+  const content = document.getElementById('edit-modal-content');
+  content.innerHTML = `
+    <h2 class="modal-title">✏️ Modifier la performance</h2>
+    <div style="background:rgba(255,255,255,0.04);border-radius:var(--radius-sm);padding:0.8rem 1rem;margin-bottom:1.2rem;font-size:0.85rem;color:var(--text-dim)">
+      <strong style="color:var(--text)">${skName}</strong> · ${compLabel}<br>
+      <span>${e.cs?.nom_categorie||''} — ${e.cs?.nom_segment||''}</span>
+    </div>
+    <div class="form-row form-row-2">
+      <div class="form-group"><label>Rang</label><input class="form-control" type="number" id="ee-rank" value="${e.rank||''}" min="1" /></div>
+      <div class="form-group"><label>N° de départ</label><input class="form-control" type="number" id="ee-start" value="${e.starting_number||''}" min="1" /></div>
+    </div>
+    <div class="form-row form-row-2">
+      <div class="form-group"><label>Score total</label><input class="form-control" type="number" step="0.01" id="ee-total" value="${e.total_segment_score||''}" /></div>
+      <div class="form-group"><label>Éléments</label><input class="form-control" type="number" step="0.01" id="ee-elem" value="${e.total_element_score||''}" /></div>
+    </div>
+    <div class="form-row form-row-2">
+      <div class="form-group"><label>Composantes</label><input class="form-control" type="number" step="0.01" id="ee-comp" value="${e.total_component_score||''}" /></div>
+      <div class="form-group"><label>Déductions</label><input class="form-control" type="number" step="0.01" id="ee-ded" value="${e.total_deductions||0}" min="0" /></div>
+    </div>
+    <div id="edit-entry-msg" class="alert" style="display:none;margin-bottom:0.8rem"></div>
+    <div style="display:flex;gap:0.6rem;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeEditModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveEditEntry(${id})">💾 Enregistrer</button>
+    </div>
+  `;
+  document.getElementById('edit-modal').style.display = 'flex';
+}
+
+async function saveEditEntry(id) {
+  const payload = {
+    rank:                  parseInt(document.getElementById('ee-rank').value) || null,
+    starting_number:       parseInt(document.getElementById('ee-start').value) || null,
+    total_segment_score:   parseFloat(document.getElementById('ee-total').value) || null,
+    total_element_score:   parseFloat(document.getElementById('ee-elem').value) || null,
+    total_component_score: parseFloat(document.getElementById('ee-comp').value) || null,
+    total_deductions:      parseFloat(document.getElementById('ee-ded').value) || 0
+  };
+  const { error } = await sb.from('entries').update(payload).eq('id', id);
+  if (error) { showMsg('edit-entry-msg','alert-error',error.message); return; }
+  closeEditModal();
+  loadGlobalData();
+}
+
+async function deleteEntry(id) {
+  if (!confirm('Supprimer cette performance ? Cette action est irréversible.')) return;
+  // Supprimer les éléments et composantes liés
+  await sb.from('executed_elements').delete().eq('entry_id', id);
+  await sb.from('program_components').delete().eq('entry_id', id);
+  const { error } = await sb.from('entries').delete().eq('id', id);
+  if (error) { alert('Erreur : ' + error.message); return; }
+  loadGlobalData();
+}
 async function showDetail(entryId) {
   const modal = document.getElementById('detail-modal');
   const content = document.getElementById('modal-content');
