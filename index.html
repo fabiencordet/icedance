@@ -1975,7 +1975,7 @@ async function openEditCatSeg(id) {
     <div class="form-group">
       <label>Segment</label>
       <select class="form-control" id="ecs-seg">
-        ${['SP','FS','RD','PD','FD'].map(s => `<option value="${s}" ${cs.nom_segment===s?'selected':''}>${s}</option>`).join('')}
+        ${['FREE DANCE','FS','RD','PD','FD'].map(s => `<option value="${s}" ${cs.nom_segment===s?'selected':''}>${s}</option>`).join('')}
       </select>
     </div>
     <div id="edit-cs-msg" class="alert" style="display:none;margin-bottom:0.8rem"></div>
@@ -2235,7 +2235,7 @@ Extrais TOUTES les données et retourne UNIQUEMENT un JSON valide avec cette str
     "lieu": "string or null"
   },
   "nom_categorie": "string (ex: Senior Ladies, Junior Men, Ice Dance...)",
-  "nom_segment": "string (SP, FS, RD, PD, FD)",
+  "nom_segment": "string (FREE DANCE, FS, RD, PD, FD)",
   "entries": [
     {
       "rank": number,
