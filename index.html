@@ -222,6 +222,7 @@
     .alert-error { background: rgba(224,92,92,0.15); border: 1px solid rgba(224,92,92,0.3); color: #f0a0a0; }
     .alert-success { background: rgba(76,175,135,0.15); border: 1px solid rgba(76,175,135,0.3); color: #80d4b0; }
     .alert-info { background: rgba(100,180,220,0.1); border: 1px solid rgba(100,180,220,0.2); color: var(--ice); }
+    .alert-warning { background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.35); color: var(--gold-light); }
 
     /* ===== LOADING ===== */
     .spinner {
@@ -1235,9 +1236,34 @@ async function createCompetition() {
     lieu: val('m-comp-lieu')
   };
   if (!payload.short_name) { showMsg('comp-create-msg','alert-error','Le nom court est obligatoire'); return; }
+
+  // Vérification doublon
+  const { data: existing } = await sb.from('competitions')
+    .select('id,short_name,long_name,date_debut,lieu')
+    .or(`short_name.ilike.${payload.short_name},long_name.ilike.${payload.long_name||'__VIDE__'}`)
+    .limit(5);
+  if (existing?.length) {
+    const list = existing.map(c => `<strong>${c.short_name}</strong> — ${c.long_name||'?'} (${c.date_debut||'?'}, ${c.lieu||'?'})`).join('<br>');
+    showMsg('comp-create-msg','alert-warning',`⚠️ Doublon possible :<br>${list}<br><button class="btn btn-primary btn-sm" style="margin-top:0.6rem" onclick="forceCreateCompetition()">Créer quand même</button>`);
+    document.getElementById('comp-create-msg').innerHTML = document.getElementById('comp-create-msg').innerHTML; // force re-render
+    document.getElementById('comp-create-msg').className = 'alert alert-warning';
+    document.getElementById('comp-create-msg').style.display = 'block';
+    document.getElementById('comp-create-msg').innerHTML = `⚠️ Doublon possible :<br>${list}<br><button class="btn btn-primary btn-sm" style="margin-top:0.6rem" onclick="forceCreateCompetition()">Créer quand même</button>`;
+    window._pendingCompPayload = payload;
+    return;
+  }
+  await _doCreateCompetition(payload);
+}
+
+async function forceCreateCompetition() {
+  if (window._pendingCompPayload) await _doCreateCompetition(window._pendingCompPayload);
+}
+
+async function _doCreateCompetition(payload) {
   const { error } = await sb.from('competitions').insert(payload);
   if (error) { showMsg('comp-create-msg','alert-error',error.message); return; }
   showMsg('comp-create-msg','alert-success','✅ Compétition créée !');
+  window._pendingCompPayload = null;
   loadCompetitionsDropdowns(); loadManageComps();
   ['m-comp-short','m-comp-long','m-comp-deb','m-comp-fin','m-comp-lieu'].forEach(id => document.getElementById(id).value='');
 }
@@ -1248,9 +1274,34 @@ async function createSkater() {
     nation: val('m-sk-nation').toUpperCase(), genre: val('m-sk-genre')
   };
   if (!payload.nom || !payload.prenom) { showMsg('skater-create-msg','alert-error','Nom et prénom obligatoires'); return; }
+
+  // Vérification doublon — même nom (insensible à la casse) ou prénom+nation similaires
+  const { data: existing } = await sb.from('skaters')
+    .select('id,nom,prenom,nation')
+    .ilike('nom', payload.nom)
+    .limit(5);
+  const matches = existing?.filter(s => s.prenom.toLowerCase() === payload.prenom.toLowerCase());
+  if (matches?.length) {
+    const list = matches.map(s => `<strong>${s.prenom} ${s.nom}</strong> <span class="nation-tag">${s.nation||'?'}</span>`).join('  ');
+    const msgEl = document.getElementById('skater-create-msg');
+    msgEl.className = 'alert alert-warning';
+    msgEl.style.display = 'block';
+    msgEl.innerHTML = `⚠️ Patineur déjà présent :<br><div style="margin:0.5rem 0">${list}</div><button class="btn btn-primary btn-sm" onclick="forceCreateSkater()">Créer quand même</button>`;
+    window._pendingSkaterPayload = payload;
+    return;
+  }
+  await _doCreateSkater(payload);
+}
+
+async function forceCreateSkater() {
+  if (window._pendingSkaterPayload) await _doCreateSkater(window._pendingSkaterPayload);
+}
+
+async function _doCreateSkater(payload) {
   const { error } = await sb.from('skaters').insert(payload);
   if (error) { showMsg('skater-create-msg','alert-error',error.message); return; }
   showMsg('skater-create-msg','alert-success','✅ Patineur créé !');
+  window._pendingSkaterPayload = null;
   loadManageSkaters();
   ['m-sk-nom','m-sk-prenom','m-sk-nation'].forEach(id => document.getElementById(id).value='');
 }
@@ -1438,8 +1489,22 @@ async function saveEditComp(id) {
     progress.style.display = 'block';
     fill.style.width = '30%'; status.textContent = 'Upload de l\'image…';
 
+    // Créer le bucket s'il n'existe pas encore
+    fill.style.width = '15%'; status.textContent = 'Vérification du bucket…';
+    const { data: buckets } = await sb.storage.listBuckets();
+    const bucketExists = buckets?.some(b => b.name === 'competition-images');
+    if (!bucketExists) {
+      fill.style.width = '25%'; status.textContent = 'Création du bucket…';
+      const { error: bucketErr } = await sb.storage.createBucket('competition-images', { public: true });
+      if (bucketErr && !bucketErr.message?.includes('already exists')) {
+        showMsg('edit-comp-msg','alert-error','Impossible de créer le bucket : ' + bucketErr.message);
+        btn.disabled = false; progress.style.display = 'none'; return;
+      }
+    }
+
     const ext = file.name.split('.').pop();
     const path = `competitions/${id}/cover_${Date.now()}.${ext}`;
+    fill.style.width = '40%'; status.textContent = 'Upload de l\'image…';
     const { data: upData, error: upErr } = await sb.storage.from('competition-images').upload(path, file, { upsert: true });
     if (upErr) {
       showMsg('edit-comp-msg','alert-error','Erreur upload image : ' + upErr.message);
@@ -1681,61 +1746,106 @@ async function importAiData() {
   if (!aiExtractedData || !sb) return;
   const d = aiExtractedData;
   const btn = event.target;
-  btn.disabled = true; btn.textContent = '⏳ Import en cours…';
+  btn.disabled = true; btn.textContent = '⏳ Vérification des doublons…';
 
   try {
     // 1. Upsert competition
     let { data: compData } = await sb.from('competitions')
-      .select('id').eq('short_name', d.competition.short_name).limit(1);
+      .select('id,short_name').eq('short_name', d.competition.short_name).limit(1);
     let compId;
-    if (compData?.length) { compId = compData[0].id; }
-    else {
+    let dupWarnings = [];
+
+    if (compData?.length) {
+      compId = compData[0].id;
+      dupWarnings.push(`🏟 Compétition déjà existante : <strong>${d.competition.short_name}</strong> — réutilisée.`);
+    } else {
       const { data: c } = await sb.from('competitions').insert(d.competition).select('id').single();
       compId = c.id;
     }
 
-    // 2. Create category_segment
-    const { data: csData } = await sb.from('categories_segments')
-      .insert({ competition_id: compId, nom_categorie: d.nom_categorie, nom_segment: d.nom_segment })
-      .select('id').single();
-    const csId = csData.id;
+    // 2. Vérifier si le segment existe déjà pour cette compétition
+    let { data: csExisting } = await sb.from('categories_segments')
+      .select('id,nom_categorie,nom_segment')
+      .eq('competition_id', compId)
+      .eq('nom_categorie', d.nom_categorie)
+      .eq('nom_segment', d.nom_segment)
+      .limit(1);
 
-    // 3. Process each entry
-    for (const e of d.entries) {
-      // Upsert skaters
-      const sk1Id = await upsertSkater(e.skater_1);
-      const sk2Id = e.skater_2 ? await upsertSkater(e.skater_2) : null;
-
-      // Insert entry
-      const { data: entryData } = await sb.from('entries').insert({
-        category_segment_id: csId,
-        skater_1_id: sk1Id, skater_2_id: sk2Id,
-        rank: e.rank, starting_number: e.starting_number,
-        total_segment_score: e.total_segment_score,
-        total_element_score: e.total_element_score,
-        total_component_score: e.total_component_score,
-        total_deductions: e.total_deductions || 0
-      }).select('id').single();
-      const entryId = entryData.id;
-
-      // Insert elements
-      if (e.executed_elements?.length) {
-        await sb.from('executed_elements').insert(e.executed_elements.map(el => ({ ...el, entry_id: entryId })));
-      }
-      // Insert components
-      if (e.program_components?.length) {
-        await sb.from('program_components').insert(e.program_components.map(c => ({ ...c, entry_id: entryId })));
-      }
+    if (csExisting?.length) {
+      btn.disabled = false;
+      btn.textContent = '💾 Importer dans la base';
+      const msgEl = document.getElementById('ai-preview-content');
+      const existingHtml = msgEl.innerHTML;
+      const warnDiv = document.createElement('div');
+      warnDiv.className = 'alert alert-warning';
+      warnDiv.style.marginBottom = '1rem';
+      warnDiv.innerHTML = `⚠️ Ce segment existe déjà en base :<br><strong>${d.nom_categorie} — ${d.nom_segment}</strong> pour <strong>${d.competition.short_name}</strong><br>
+        <div style="display:flex;gap:0.5rem;margin-top:0.6rem">
+          <button class="btn btn-danger btn-sm" onclick="forceImportAiData()">Importer quand même (doublons possibles)</button>
+          <button class="btn btn-ghost btn-sm" onclick="this.closest('.alert').remove()">Annuler</button>
+        </div>`;
+      msgEl.prepend(warnDiv);
+      return;
     }
 
-    btn.textContent = '✅ Importé avec succès !';
-    btn.style.background = 'var(--success)';
-    loadHomeStats(); loadGlobalData(); loadCompetitionsDropdowns();
+    btn.textContent = '⏳ Import en cours…';
+    await _doImportAiData(compId, d, dupWarnings, btn);
+
   } catch(err) {
     btn.textContent = '❌ Erreur — réessayer';
     btn.disabled = false;
     alert('Erreur lors de l\'import : ' + err.message);
   }
+}
+
+async function forceImportAiData() {
+  if (!aiExtractedData || !sb) return;
+  const d = aiExtractedData;
+  let { data: compData } = await sb.from('competitions').select('id').eq('short_name', d.competition.short_name).limit(1);
+  let compId;
+  if (compData?.length) { compId = compData[0].id; }
+  else {
+    const { data: c } = await sb.from('competitions').insert(d.competition).select('id').single();
+    compId = c.id;
+  }
+  const btn = document.querySelector('#ai-preview .btn-primary') || { textContent: '', disabled: false, style: {} };
+  await _doImportAiData(compId, d, [], btn);
+}
+
+async function _doImportAiData(compId, d, dupWarnings, btn) {
+  // Create category_segment
+  const { data: csData } = await sb.from('categories_segments')
+    .insert({ competition_id: compId, nom_categorie: d.nom_categorie, nom_segment: d.nom_segment })
+    .select('id').single();
+  const csId = csData.id;
+
+  // Process each entry
+  for (const e of d.entries) {
+    const sk1Id = await upsertSkater(e.skater_1);
+    const sk2Id = e.skater_2 ? await upsertSkater(e.skater_2) : null;
+
+    const { data: entryData } = await sb.from('entries').insert({
+      category_segment_id: csId,
+      skater_1_id: sk1Id, skater_2_id: sk2Id,
+      rank: e.rank, starting_number: e.starting_number,
+      total_segment_score: e.total_segment_score,
+      total_element_score: e.total_element_score,
+      total_component_score: e.total_component_score,
+      total_deductions: e.total_deductions || 0
+    }).select('id').single();
+    const entryId = entryData.id;
+
+    if (e.executed_elements?.length) {
+      await sb.from('executed_elements').insert(e.executed_elements.map(el => ({ ...el, entry_id: entryId })));
+    }
+    if (e.program_components?.length) {
+      await sb.from('program_components').insert(e.program_components.map(c => ({ ...c, entry_id: entryId })));
+    }
+  }
+
+  const successMsg = '✅ Importé avec succès !' + (dupWarnings.length ? ' (' + dupWarnings.length + ' élément(s) réutilisé(s))' : '');
+  if (btn.textContent !== undefined) { btn.textContent = successMsg; btn.style.background = 'var(--success)'; }
+  loadHomeStats(); loadGlobalData(); loadCompetitionsDropdowns();
 }
 
 async function upsertSkater(s) {
