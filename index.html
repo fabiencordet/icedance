@@ -1534,19 +1534,7 @@ async function saveEditComp(id) {
     progress.style.display = 'block';
     fill.style.width = '30%'; status.textContent = 'Upload de l\'image…';
 
-    // Créer le bucket s'il n'existe pas encore
-    fill.style.width = '15%'; status.textContent = 'Vérification du bucket…';
-    const { data: buckets } = await sb.storage.listBuckets();
-    const bucketExists = buckets?.some(b => b.name === 'competition-images');
-    if (!bucketExists) {
-      fill.style.width = '25%'; status.textContent = 'Création du bucket…';
-      const { error: bucketErr } = await sb.storage.createBucket('competition-images', { public: true });
-      if (bucketErr && !bucketErr.message?.includes('already exists')) {
-        showMsg('edit-comp-msg','alert-error','Impossible de créer le bucket : ' + bucketErr.message);
-        btn.disabled = false; progress.style.display = 'none'; return;
-      }
-    }
-
+    // Upload direct (le bucket existe déjà)
     const ext = file.name.split('.').pop();
     const path = `competitions/${id}/cover_${Date.now()}.${ext}`;
     fill.style.width = '40%'; status.textContent = 'Upload de l\'image…';
