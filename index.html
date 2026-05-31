@@ -1,0 +1,1649 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IceStats — Analyse de Patinage Artistique</title>
+
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    /* ===== DESIGN SYSTEM ===== */
+    @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+    :root {
+      --ice: #e8f4f8;
+      --ice-deep: #c5dde8;
+      --navy: #0d1b2a;
+      --navy-mid: #1a2e42;
+      --navy-light: #243b52;
+      --gold: #c9a84c;
+      --gold-light: #e8c97a;
+      --silver: #9ab0c0;
+      --white: #f5f9fc;
+      --danger: #e05c5c;
+      --success: #4caf87;
+      --text: #d0e4f0;
+      --text-dim: #7a9ab0;
+      --border: rgba(150,200,230,0.15);
+      --card: rgba(26,46,66,0.7);
+      --radius: 12px;
+      --radius-sm: 6px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--navy);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Background rink texture */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% -10%, rgba(100,180,220,0.08) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 40% at 80% 110%, rgba(201,168,76,0.05) 0%, transparent 70%),
+        repeating-linear-gradient(0deg, transparent, transparent 59px, rgba(150,200,230,0.03) 59px, rgba(150,200,230,0.03) 60px),
+        repeating-linear-gradient(90deg, transparent, transparent 59px, rgba(150,200,230,0.02) 59px, rgba(150,200,230,0.02) 60px);
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ===== LAYOUT ===== */
+    #app { position: relative; z-index: 1; }
+
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.2rem 2.5rem;
+      background: rgba(13,27,42,0.95);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+      position: sticky; top: 0; z-index: 100;
+    }
+
+    .logo {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.6rem; color: var(--white);
+      display: flex; align-items: center; gap: 0.6rem;
+    }
+    .logo span { color: var(--gold); }
+    .logo-icon { font-size: 1.4rem; }
+
+    #auth-area { display: flex; align-items: center; gap: 1rem; }
+
+    nav {
+      display: flex; gap: 0.3rem;
+      background: rgba(255,255,255,0.04);
+      padding: 0.3rem; border-radius: var(--radius);
+      margin: 0 1rem;
+    }
+    .nav-btn {
+      background: none; border: none; color: var(--text-dim);
+      padding: 0.5rem 1.1rem; border-radius: var(--radius-sm);
+      cursor: pointer; font-family: 'DM Sans', sans-serif;
+      font-size: 0.85rem; font-weight: 500;
+      transition: all 0.2s;
+    }
+    .nav-btn:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+    .nav-btn.active { background: var(--navy-light); color: var(--white); }
+    .nav-btn.admin-only { color: var(--gold); }
+    .nav-btn.admin-only:hover { background: rgba(201,168,76,0.12); }
+
+    main { padding: 2rem 2.5rem; max-width: 1400px; margin: 0 auto; }
+
+    /* ===== CARDS ===== */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      backdrop-filter: blur(8px);
+    }
+    .card-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.3rem; color: var(--white);
+      margin-bottom: 1.2rem;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .card-title .icon { font-size: 1rem; opacity: 0.7; }
+
+    /* ===== BUTTONS ===== */
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.55rem 1.2rem; border-radius: var(--radius-sm);
+      border: none; cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.85rem; font-weight: 500;
+      transition: all 0.2s; text-decoration: none;
+    }
+    .btn-primary { background: var(--gold); color: var(--navy); }
+    .btn-primary:hover { background: var(--gold-light); transform: translateY(-1px); }
+    .btn-secondary { background: var(--navy-light); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--silver); }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-danger:hover { opacity: 0.85; }
+    .btn-ghost { background: none; color: var(--text-dim); border: 1px solid var(--border); }
+    .btn-ghost:hover { color: var(--text); border-color: var(--silver); }
+    .btn-sm { padding: 0.35rem 0.8rem; font-size: 0.78rem; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+    /* ===== FORMS ===== */
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.4rem; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+    .form-control {
+      width: 100%; padding: 0.65rem 0.9rem;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 0.9rem;
+      transition: border-color 0.2s;
+    }
+    .form-control:focus { outline: none; border-color: var(--gold); background: rgba(255,255,255,0.06); }
+    .form-control option { background: var(--navy-mid); }
+    .form-row { display: grid; gap: 1rem; }
+    .form-row-2 { grid-template-columns: 1fr 1fr; }
+    .form-row-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .form-row-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+
+    /* ===== TABLES ===== */
+    .table-wrap { overflow-x: auto; border-radius: var(--radius-sm); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th {
+      padding: 0.7rem 0.9rem; text-align: left;
+      background: rgba(255,255,255,0.04);
+      color: var(--text-dim); font-weight: 500;
+      font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td { padding: 0.7rem 0.9rem; border-bottom: 1px solid rgba(150,200,230,0.06); }
+    tr:hover td { background: rgba(255,255,255,0.025); }
+    tr:last-child td { border-bottom: none; }
+    .rank-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border-radius: 50%;
+      font-weight: 600; font-size: 0.8rem;
+    }
+    .rank-1 { background: var(--gold); color: var(--navy); }
+    .rank-2 { background: var(--silver); color: var(--navy); }
+    .rank-3 { background: #cd7f32; color: white; }
+    .rank-other { background: rgba(255,255,255,0.06); color: var(--text-dim); }
+    .score-highlight { color: var(--gold); font-weight: 600; }
+    .nation-tag {
+      display: inline-block; padding: 0.15rem 0.5rem;
+      background: rgba(255,255,255,0.06); border-radius: 4px;
+      font-size: 0.78rem; color: var(--text-dim); font-weight: 600;
+    }
+
+    /* ===== BADGES ===== */
+    .badge {
+      display: inline-block; padding: 0.2rem 0.55rem;
+      border-radius: 20px; font-size: 0.72rem; font-weight: 600;
+    }
+    .badge-gold { background: rgba(201,168,76,0.2); color: var(--gold-light); }
+    .badge-ice { background: rgba(100,180,220,0.15); color: var(--ice); }
+    .badge-admin { background: rgba(201,168,76,0.25); color: var(--gold); }
+
+    /* ===== VIEWS ===== */
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* ===== LOGIN OVERLAY ===== */
+    #login-overlay {
+      position: fixed; inset: 0;
+      background: rgba(13,27,42,0.97);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000; backdrop-filter: blur(12px);
+    }
+    .login-box {
+      width: 100%; max-width: 400px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px; padding: 2.5rem;
+      text-align: center;
+    }
+    .login-box .logo { justify-content: center; margin-bottom: 0.4rem; font-size: 2rem; }
+    .login-subtitle { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 2rem; }
+    .login-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .login-tab { flex: 1; padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: none; color: var(--text-dim); cursor: pointer; font-family: 'DM Sans', sans-serif; font-size: 0.85rem; transition: all 0.2s; }
+    .login-tab.active { background: var(--navy-light); color: var(--white); border-color: var(--silver); }
+
+    /* ===== ALERTS ===== */
+    .alert {
+      padding: 0.8rem 1rem; border-radius: var(--radius-sm);
+      font-size: 0.85rem; margin-bottom: 1rem;
+    }
+    .alert-error { background: rgba(224,92,92,0.15); border: 1px solid rgba(224,92,92,0.3); color: #f0a0a0; }
+    .alert-success { background: rgba(76,175,135,0.15); border: 1px solid rgba(76,175,135,0.3); color: #80d4b0; }
+    .alert-info { background: rgba(100,180,220,0.1); border: 1px solid rgba(100,180,220,0.2); color: var(--ice); }
+
+    /* ===== LOADING ===== */
+    .spinner {
+      display: inline-block; width: 20px; height: 20px;
+      border: 2px solid rgba(255,255,255,0.15);
+      border-top-color: var(--gold);
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-row td { text-align: center; padding: 2rem; color: var(--text-dim); }
+
+    /* ===== PDF IMPORT AREA ===== */
+    .drop-zone {
+      border: 2px dashed var(--border); border-radius: var(--radius);
+      padding: 3rem 2rem; text-align: center; cursor: pointer;
+      transition: all 0.2s; position: relative;
+    }
+    .drop-zone:hover, .drop-zone.dragging {
+      border-color: var(--gold); background: rgba(201,168,76,0.05);
+    }
+    .drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .drop-icon { font-size: 2.5rem; margin-bottom: 0.8rem; }
+    .drop-text { color: var(--text-dim); font-size: 0.9rem; }
+    .drop-text strong { color: var(--text); }
+
+    /* ===== AI RESULT PREVIEW ===== */
+    #ai-preview { margin-top: 1.5rem; }
+    .ai-section { margin-bottom: 1.2rem; }
+    .ai-section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gold); margin-bottom: 0.6rem; font-weight: 600; }
+    .ai-json-box {
+      background: rgba(0,0,0,0.3); border-radius: var(--radius-sm);
+      padding: 1rem; font-family: monospace; font-size: 0.78rem;
+      color: var(--ice-deep); white-space: pre-wrap; max-height: 250px; overflow-y: auto;
+      border: 1px solid var(--border);
+    }
+
+    /* ===== TABS inside sections ===== */
+    .tab-bar { display: flex; gap: 0.25rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+    .tab {
+      padding: 0.6rem 1.2rem; border: none; background: none;
+      color: var(--text-dim); cursor: pointer; font-family: 'DM Sans', sans-serif;
+      font-size: 0.85rem; border-bottom: 2px solid transparent; margin-bottom: -1px;
+      transition: all 0.2s;
+    }
+    .tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ===== FILTERS ===== */
+    .filters-bar { display: flex; gap: 0.8rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1.5rem; }
+    .filters-bar .form-group { margin-bottom: 0; flex: 1; min-width: 160px; }
+
+    /* ===== MODAL ===== */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(13,27,42,0.85);
+      z-index: 500; display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(6px); padding: 1rem;
+    }
+    .modal {
+      background: var(--navy-mid);
+      border: 1px solid var(--border);
+      border-radius: 16px; padding: 2rem;
+      width: 100%; max-width: 700px; max-height: 90vh;
+      overflow-y: auto; position: relative;
+    }
+    .modal-title { font-family: 'DM Serif Display', serif; font-size: 1.4rem; color: var(--white); margin-bottom: 1.5rem; }
+    .modal-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-dim); font-size: 1.4rem; cursor: pointer; }
+    .modal-close:hover { color: var(--white); }
+
+    /* ===== HERO ===== */
+    .hero { text-align: center; padding: 3rem 1rem 2rem; }
+    .hero-title { font-family: 'DM Serif Display', serif; font-size: 3rem; color: var(--white); line-height: 1.1; margin-bottom: 0.8rem; }
+    .hero-title em { color: var(--gold); font-style: italic; }
+    .hero-sub { color: var(--text-dim); font-size: 1rem; max-width: 500px; margin: 0 auto 2rem; }
+    .hero-stats { display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; }
+    .hero-stat { text-align: center; }
+    .hero-stat .num { font-family: 'DM Serif Display', serif; font-size: 2rem; color: var(--gold); }
+    .hero-stat .lbl { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; }
+
+    /* ===== GRID ===== */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; }
+
+    /* ===== EMPTY STATE ===== */
+    .empty { text-align: center; padding: 3rem 1rem; color: var(--text-dim); }
+    .empty-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.4; }
+    .empty p { font-size: 0.9rem; }
+
+    /* ===== ELEMENT TABLE (scores détaillés) ===== */
+    .scores-mini td { padding: 0.4rem 0.6rem; font-size: 0.78rem; }
+    .goe-pos { color: var(--success); }
+    .goe-neg { color: var(--danger); }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+      header { padding: 1rem 1.2rem; flex-wrap: wrap; gap: 0.8rem; }
+      main { padding: 1.2rem; }
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      .form-row-2, .form-row-3, .form-row-4 { grid-template-columns: 1fr; }
+      .hero-title { font-size: 2rem; }
+      nav { display: none; }
+    }
+
+    /* ===== PROGRESS BAR ===== */
+    .progress-bar { height: 4px; background: var(--navy-light); border-radius: 2px; overflow: hidden; margin-top: 0.5rem; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-light)); transition: width 0.3s; }
+
+    /* toggle sections */
+    details > summary { cursor: pointer; list-style: none; }
+    details > summary::after { content: ' ▶'; font-size: 0.7rem; color: var(--text-dim); }
+    details[open] > summary::after { content: ' ▼'; }
+    details { margin-bottom: 0.5rem; }
+  </style>
+</head>
+<body>
+
+<!-- ===== LOGIN OVERLAY ===== -->
+<div id="login-overlay">
+  <div class="login-box">
+    <div class="logo"><span class="logo-icon">⛸</span> Ice<span>Stats</span></div>
+    <p class="login-subtitle">Plateforme d'analyse de patinage artistique</p>
+
+    <div class="login-tabs">
+      <button class="login-tab active" onclick="switchLoginTab('login')">Connexion</button>
+      <button class="login-tab" onclick="switchLoginTab('register')">Inscription</button>
+    </div>
+
+    <div id="login-tab" class="tab-content active">
+      <div class="form-group">
+        <label>Email</label>
+        <input class="form-control" type="email" id="login-email" placeholder="votre@email.com" />
+      </div>
+      <div class="form-group">
+        <label>Mot de passe</label>
+        <input class="form-control" type="password" id="login-password" placeholder="••••••••" />
+      </div>
+      <div id="login-error" class="alert alert-error" style="display:none"></div>
+      <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Se connecter</button>
+      <p style="margin-top:1rem; font-size:0.8rem; color:var(--text-dim)">
+        Ou continuer sans compte (lecture seule) —
+        <a href="#" style="color:var(--gold)" onclick="continueAsGuest()">Accès visiteur</a>
+      </p>
+    </div>
+
+    <div id="register-tab" class="tab-content">
+      <div class="form-group">
+        <label>Email</label>
+        <input class="form-control" type="email" id="reg-email" placeholder="votre@email.com" />
+      </div>
+      <div class="form-group">
+        <label>Mot de passe</label>
+        <input class="form-control" type="password" id="reg-password" placeholder="••••••••" />
+      </div>
+      <div id="register-error" class="alert alert-error" style="display:none"></div>
+      <div id="register-success" class="alert alert-success" style="display:none"></div>
+      <button class="btn btn-primary" style="width:100%" onclick="doRegister()">Créer un compte</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== APP ===== -->
+<div id="app" style="display:none">
+
+  <header>
+    <div class="logo"><span class="logo-icon">⛸</span> Ice<span>Stats</span></div>
+    <nav id="main-nav">
+      <button class="nav-btn active" onclick="showView('home')">Accueil</button>
+      <button class="nav-btn" onclick="showView('skater')">Patineur</button>
+      <button class="nav-btn" onclick="showView('competition')">Compétition</button>
+      <button class="nav-btn" onclick="showView('global')">Tableau global</button>
+      <button class="nav-btn admin-only" id="nav-admin" style="display:none" onclick="showView('admin')">⚙ Admin</button>
+    </nav>
+    <div id="auth-area">
+      <span id="user-badge" class="badge"></span>
+      <button class="btn btn-ghost btn-sm" onclick="doLogout()">Déconnexion</button>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ===== HOME ===== -->
+    <div id="view-home" class="view active">
+      <div class="hero">
+        <h1 class="hero-title">Analysez chaque <em>performance</em></h1>
+        <p class="hero-sub">Historiques, classements, scores détaillés — toutes les données du patinage artistique en un seul endroit.</p>
+        <div class="hero-stats" id="hero-stats">
+          <div class="hero-stat"><div class="num" id="stat-comps">—</div><div class="lbl">Compétitions</div></div>
+          <div class="hero-stat"><div class="num" id="stat-skaters">—</div><div class="lbl">Patineurs</div></div>
+          <div class="hero-stat"><div class="num" id="stat-entries">—</div><div class="lbl">Performances</div></div>
+        </div>
+      </div>
+      <div class="grid-3" style="margin-top:1.5rem">
+        <div class="card" style="cursor:pointer" onclick="showView('skater')">
+          <div class="card-title">🏅 Historique Patineur</div>
+          <p style="color:var(--text-dim);font-size:0.85rem">Retrouvez tous les résultats d'un patineur ou couple au fil des compétitions.</p>
+        </div>
+        <div class="card" style="cursor:pointer" onclick="showView('competition')">
+          <div class="card-title">🏆 Vue Compétition</div>
+          <p style="color:var(--text-dim);font-size:0.85rem">Classement complet d'une catégorie et d'un segment pour une compétition donnée.</p>
+        </div>
+        <div class="card" style="cursor:pointer" onclick="showView('global')">
+          <div class="card-title">📊 Tableau Global</div>
+          <p style="color:var(--text-dim);font-size:0.85rem">Toutes les performances, tous filtres disponibles pour vos analyses.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SKATER VIEW ===== -->
+    <div id="view-skater" class="view">
+      <div class="card" style="margin-bottom:1.5rem">
+        <div class="card-title">🏅 <span>Historique d'un patineur</span></div>
+        <div class="form-row form-row-3">
+          <div class="form-group">
+            <label>Nom</label>
+            <input class="form-control" id="search-nom" placeholder="Dupont…" oninput="searchSkaters()" />
+          </div>
+          <div class="form-group">
+            <label>Prénom</label>
+            <input class="form-control" id="search-prenom" placeholder="Marie…" oninput="searchSkaters()" />
+          </div>
+          <div class="form-group">
+            <label>Nation</label>
+            <input class="form-control" id="search-nation" placeholder="FRA…" oninput="searchSkaters()" />
+          </div>
+        </div>
+        <div id="skater-suggestions" style="margin-top:0.5rem"></div>
+      </div>
+
+      <div id="skater-results" style="display:none">
+        <div class="card">
+          <div id="skater-header" style="margin-bottom:1.2rem"></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Compétition</th><th>Date</th><th>Catégorie</th><th>Segment</th>
+                  <th>Rang</th><th>Score total</th><th>Éléments</th><th>Composantes</th>
+                  <th>Déductions</th><th>Détail</th>
+                </tr>
+              </thead>
+              <tbody id="skater-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== COMPETITION VIEW ===== -->
+    <div id="view-competition" class="view">
+      <div class="card" style="margin-bottom:1.5rem">
+        <div class="card-title">🏆 <span>Résultats d'une compétition</span></div>
+        <div class="form-row form-row-3">
+          <div class="form-group">
+            <label>Compétition</label>
+            <select class="form-control" id="sel-comp" onchange="loadCategories()">
+              <option value="">— Choisir —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Catégorie</label>
+            <select class="form-control" id="sel-cat" onchange="loadSegments()">
+              <option value="">— Choisir —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Segment</label>
+            <select class="form-control" id="sel-seg" onchange="loadCompResults()">
+              <option value="">— Choisir —</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div id="comp-results">
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Rang</th><th>Patineur(s)</th><th>Nation</th><th>N°</th>
+                  <th>Score total</th><th>Éléments</th><th>Composantes</th><th>Déductions</th><th>Détail</th>
+                </tr>
+              </thead>
+              <tbody id="comp-tbody">
+                <tr class="loading-row"><td colspan="9"><div class="empty"><div class="empty-icon">🏆</div><p>Sélectionnez une compétition pour afficher les résultats</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== GLOBAL VIEW ===== -->
+    <div id="view-global" class="view">
+      <div class="card" style="margin-bottom:1.5rem">
+        <div class="card-title">📊 <span>Tableau global — tous résultats</span></div>
+        <div class="filters-bar">
+          <div class="form-group"><label>Compétition</label><select class="form-control" id="g-comp" onchange="applyGlobalFilters()"><option value="">Toutes</option></select></div>
+          <div class="form-group"><label>Catégorie</label><select class="form-control" id="g-cat" onchange="applyGlobalFilters()"><option value="">Toutes</option></select></div>
+          <div class="form-group"><label>Segment</label><select class="form-control" id="g-seg" onchange="applyGlobalFilters()"><option value="">Tous</option></select></div>
+          <div class="form-group"><label>Nation</label><input class="form-control" id="g-nat" placeholder="FRA…" oninput="applyGlobalFilters()" /></div>
+          <div class="form-group"><label>Patineur</label><input class="form-control" id="g-name" placeholder="Nom…" oninput="applyGlobalFilters()" /></div>
+          <div class="form-group"><label>Score min</label><input class="form-control" id="g-score-min" type="number" placeholder="0" oninput="applyGlobalFilters()" /></div>
+          <div class="form-group"><label>Score max</label><input class="form-control" id="g-score-max" type="number" placeholder="300" oninput="applyGlobalFilters()" /></div>
+          <div style="align-self:flex-end"><button class="btn btn-ghost btn-sm" onclick="resetGlobalFilters()">↺ Réinitialiser</button></div>
+        </div>
+        <div id="global-count" style="color:var(--text-dim);font-size:0.82rem;margin-bottom:1rem"></div>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Rang</th><th>Patineur(s)</th><th>Nation</th><th>Compétition</th>
+                <th>Catégorie</th><th>Segment</th><th>Score total</th>
+                <th>Éléments</th><th>Composantes</th><th>Déductions</th><th>Détail</th>
+              </tr>
+            </thead>
+            <tbody id="global-tbody">
+              <tr class="loading-row"><td colspan="11"><div class="spinner"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="global-pagination" style="display:flex;gap:0.5rem;justify-content:center;padding-top:1rem;flex-wrap:wrap"></div>
+      </div>
+    </div>
+
+    <!-- ===== ADMIN VIEW ===== -->
+    <div id="view-admin" class="view">
+      <div class="tab-bar">
+        <button class="tab active" onclick="switchAdminTab('import')">📄 Import PDF</button>
+        <button class="tab" onclick="switchAdminTab('manual')">✏️ Saisie manuelle</button>
+        <button class="tab" onclick="switchAdminTab('manage')">🗂 Gérer les données</button>
+        <button class="tab" onclick="switchAdminTab('settings')">⚙️ Paramètres</button>
+      </div>
+
+      <!-- TAB: IMPORT PDF -->
+      <div id="admin-tab-import" class="tab-content active">
+        <div class="card" style="margin-bottom:1.5rem">
+          <div class="card-title">📄 Import PDF via Google Gemini AI</div>
+          <div class="alert alert-info">
+            Importez un PDF officiel ISU/Swiss Timing. Gemini analysera le document et extraira automatiquement tous les résultats.
+          </div>
+
+          <div class="form-group">
+            <label>Clé API Google Gemini</label>
+            <div style="display:flex;gap:0.5rem">
+              <input class="form-control" type="password" id="gemini-key" placeholder="AIza…" />
+              <button class="btn btn-ghost btn-sm" onclick="saveGeminiKey()">💾 Sauvegarder</button>
+            </div>
+            <small style="color:var(--text-dim)">Stockée localement dans votre navigateur uniquement</small>
+          </div>
+
+          <div class="drop-zone" id="drop-zone">
+            <input type="file" accept="application/pdf" onchange="handlePdfFile(this.files[0])" />
+            <div class="drop-icon">📄</div>
+            <p class="drop-text"><strong>Glissez un PDF ici</strong> ou cliquez pour choisir</p>
+            <p class="drop-text" style="font-size:0.78rem;margin-top:0.3rem">Formats acceptés : PDF (résultats officiels ISU / Swiss Timing)</p>
+          </div>
+
+          <div id="pdf-progress" style="display:none;margin-top:1rem">
+            <div style="display:flex;align-items:center;gap:0.8rem;color:var(--text-dim);font-size:0.85rem">
+              <div class="spinner"></div>
+              <span id="pdf-status-text">Analyse en cours…</span>
+            </div>
+            <div class="progress-bar" style="margin-top:0.8rem">
+              <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+            </div>
+          </div>
+
+          <div id="ai-preview" style="display:none">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+              <h3 style="color:var(--white);font-size:1rem">✅ Données extraites par Gemini</h3>
+              <div style="display:flex;gap:0.5rem">
+                <button class="btn btn-secondary btn-sm" onclick="editAiData()">✏️ Modifier</button>
+                <button class="btn btn-primary" onclick="importAiData()">💾 Importer dans la base</button>
+              </div>
+            </div>
+            <div id="ai-preview-content"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: SAISIE MANUELLE -->
+      <div id="admin-tab-manual" class="tab-content">
+        <div class="grid-2" style="margin-bottom:1.5rem">
+
+          <!-- Nouvelle compétition -->
+          <div class="card">
+            <div class="card-title">🏟 Nouvelle compétition</div>
+            <div class="form-group"><label>Nom court</label><input class="form-control" id="m-comp-short" placeholder="GPF 2024" /></div>
+            <div class="form-group"><label>Nom complet</label><input class="form-control" id="m-comp-long" placeholder="Grand Prix Final 2024" /></div>
+            <div class="form-row form-row-2">
+              <div class="form-group"><label>Date début</label><input class="form-control" type="date" id="m-comp-deb" /></div>
+              <div class="form-group"><label>Date fin</label><input class="form-control" type="date" id="m-comp-fin" /></div>
+            </div>
+            <div class="form-group"><label>Lieu</label><input class="form-control" id="m-comp-lieu" placeholder="Grenoble, France" /></div>
+            <button class="btn btn-primary" onclick="createCompetition()">Créer</button>
+            <div id="comp-create-msg" class="alert" style="display:none;margin-top:0.8rem"></div>
+          </div>
+
+          <!-- Nouveau patineur -->
+          <div class="card">
+            <div class="card-title">🧊 Nouveau patineur</div>
+            <div class="form-row form-row-2">
+              <div class="form-group"><label>Nom</label><input class="form-control" id="m-sk-nom" /></div>
+              <div class="form-group"><label>Prénom</label><input class="form-control" id="m-sk-prenom" /></div>
+            </div>
+            <div class="form-row form-row-2">
+              <div class="form-group"><label>Nation</label><input class="form-control" id="m-sk-nation" placeholder="FRA" maxlength="3" style="text-transform:uppercase" /></div>
+              <div class="form-group"><label>Genre</label>
+                <select class="form-control" id="m-sk-genre">
+                  <option value="F">Féminin</option>
+                  <option value="M">Masculin</option>
+                  <option value="X">Autre</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="createSkater()">Créer</button>
+            <div id="skater-create-msg" class="alert" style="display:none;margin-top:0.8rem"></div>
+          </div>
+        </div>
+
+        <!-- Nouvelle performance -->
+        <div class="card">
+          <div class="card-title">📝 Nouvelle performance</div>
+          <div class="form-row form-row-3">
+            <div class="form-group">
+              <label>Compétition</label>
+              <select class="form-control" id="m-entry-comp" onchange="loadCatSegForEntry()">
+                <option value="">— Choisir —</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Catégorie</label>
+              <input class="form-control" id="m-entry-cat" placeholder="Senior Ladies" />
+            </div>
+            <div class="form-group">
+              <label>Segment</label>
+              <select class="form-control" id="m-entry-seg">
+                <option value="SP">SP — Programme court</option>
+                <option value="FS">FS — Programme libre</option>
+                <option value="RD">RD — Danse rythmique</option>
+                <option value="PD">PD — Danse imposée</option>
+                <option value="FD">FD — Danse libre</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row form-row-2">
+            <div class="form-group">
+              <label>Patineur 1</label>
+              <input class="form-control" id="m-sk1-search" placeholder="Chercher nom…" oninput="searchSkaterForEntry('m-sk1-search','m-sk1-id','m-sk1-list')" />
+              <datalist id="m-sk1-list"></datalist>
+              <input type="hidden" id="m-sk1-id" />
+            </div>
+            <div class="form-group">
+              <label>Patineur 2 (couples seulement)</label>
+              <input class="form-control" id="m-sk2-search" placeholder="Chercher nom…" oninput="searchSkaterForEntry('m-sk2-search','m-sk2-id','m-sk2-list')" />
+              <datalist id="m-sk2-list"></datalist>
+              <input type="hidden" id="m-sk2-id" />
+            </div>
+          </div>
+          <div class="form-row form-row-4">
+            <div class="form-group"><label>Rang</label><input class="form-control" id="m-rank" type="number" /></div>
+            <div class="form-group"><label>N° de départ</label><input class="form-control" id="m-sn" type="number" /></div>
+            <div class="form-group"><label>Score total</label><input class="form-control" id="m-total" type="number" step="0.01" /></div>
+            <div class="form-group"><label>Déductions</label><input class="form-control" id="m-ded" type="number" step="0.01" value="0" /></div>
+          </div>
+          <div class="form-row form-row-2">
+            <div class="form-group"><label>Score éléments</label><input class="form-control" id="m-elem" type="number" step="0.01" /></div>
+            <div class="form-group"><label>Score composantes</label><input class="form-control" id="m-comp-score" type="number" step="0.01" /></div>
+          </div>
+          <button class="btn btn-primary" onclick="createEntry()">Créer la performance</button>
+          <div id="entry-create-msg" class="alert" style="display:none;margin-top:0.8rem"></div>
+        </div>
+      </div>
+
+      <!-- TAB: GÉRER -->
+      <div id="admin-tab-manage" class="tab-content">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">🏟 Compétitions</div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Nom</th><th>Date</th><th>Lieu</th><th></th></tr></thead>
+                <tbody id="manage-comp-tbody">
+                  <tr class="loading-row"><td colspan="4"><div class="spinner"></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">🧊 Patineurs</div>
+            <div class="form-group"><input class="form-control" id="manage-sk-search" placeholder="Chercher un patineur…" oninput="loadManageSkaters()" /></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Nom</th><th>Nation</th><th></th></tr></thead>
+                <tbody id="manage-sk-tbody">
+                  <tr class="loading-row"><td colspan="3"><div class="spinner"></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: PARAMÈTRES -->
+      <div id="admin-tab-settings" class="tab-content">
+        <div class="card" style="max-width:500px">
+          <div class="card-title">⚙️ Paramètres</div>
+          <div class="alert alert-info" style="margin-bottom:1.5rem">
+            Pour donner le rôle admin à un utilisateur, exécutez dans Supabase SQL Editor :<br>
+            <code style="font-size:0.78rem;display:block;margin-top:0.5rem;background:rgba(0,0,0,0.3);padding:0.5rem;border-radius:4px">UPDATE auth.users SET raw_user_meta_data = jsonb_set(COALESCE(raw_user_meta_data, '{}'), '{role}', '"admin"') WHERE id = 'USER-ID';</code>
+          </div>
+          <div class="form-group">
+            <label>Votre User ID</label>
+            <input class="form-control" id="my-user-id" readonly />
+            <small style="color:var(--text-dim)">Copiez cet ID dans la requête SQL ci-dessus</small>
+          </div>
+          <div class="form-group" style="margin-top:1rem">
+            <label>URL Supabase</label>
+            <input class="form-control" id="cfg-url" placeholder="https://xxxx.supabase.co" />
+          </div>
+          <div class="form-group">
+            <label>Clé publique Supabase (anon key)</label>
+            <input class="form-control" id="cfg-key" placeholder="eyJhbG…" />
+          </div>
+          <button class="btn btn-primary" onclick="saveConfig()">💾 Sauvegarder la config</button>
+          <div id="cfg-msg" class="alert" style="display:none;margin-top:0.8rem"></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ===== DETAIL MODAL ===== -->
+<div id="detail-modal" class="modal-backdrop" style="display:none">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<!-- ===== SCRIPT ===== -->
+<script>
+// ============================================================
+// CONFIG — Remplacez ces valeurs par les vôtres
+// (ou utilisez l'onglet Paramètres dans l'admin)
+// ============================================================
+let SUPABASE_URL = localStorage.getItem('sb_url') || 'VOTRE_URL_SUPABASE';
+let SUPABASE_KEY = localStorage.getItem('sb_key') || 'VOTRE_CLE_ANON_SUPABASE';
+let GEMINI_KEY   = localStorage.getItem('gemini_key') || '';
+
+let sb = null;
+let currentUser = null;
+let isAdmin = false;
+let globalData = [];
+let globalPage = 1;
+const PAGE_SIZE = 50;
+let aiExtractedData = null;
+
+// ============================================================
+// INIT
+// ============================================================
+function initSupabase() {
+  if (!SUPABASE_URL || SUPABASE_URL === 'VOTRE_URL_SUPABASE') return false;
+  try {
+    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    return true;
+  } catch(e) { return false; }
+}
+
+async function boot() {
+  // Pré-remplir les champs config
+  document.getElementById('cfg-url').value = SUPABASE_URL !== 'VOTRE_URL_SUPABASE' ? SUPABASE_URL : '';
+  document.getElementById('cfg-key').value = SUPABASE_KEY !== 'VOTRE_CLE_ANON_SUPABASE' ? SUPABASE_KEY : '';
+  if (GEMINI_KEY) document.getElementById('gemini-key').value = GEMINI_KEY;
+
+  if (!initSupabase()) {
+    // Montrer l'app en mode config
+    document.getElementById('login-overlay').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    showView('admin');
+    switchAdminTab('settings');
+    showMsg('cfg-msg', 'alert-info', '⚠️ Configurez d\'abord votre URL et clé Supabase ci-dessus.');
+    return;
+  }
+
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    await setUser(session.user);
+  }
+}
+
+async function setUser(user) {
+  currentUser = user;
+  isAdmin = user?.user_metadata?.role === 'admin';
+  document.getElementById('login-overlay').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('user-badge').textContent = isAdmin ? '⭐ Admin' : '👤 Visiteur';
+  document.getElementById('user-badge').className = 'badge ' + (isAdmin ? 'badge-admin' : 'badge-ice');
+  if (isAdmin) {
+    document.getElementById('nav-admin').style.display = 'inline-block';
+    document.getElementById('my-user-id').value = user.id;
+  }
+  loadHomeStats();
+  loadCompetitionsDropdowns();
+  loadGlobalData();
+  if (isAdmin) { loadManageComps(); loadManageSkaters(); }
+}
+
+function continueAsGuest() {
+  currentUser = null; isAdmin = false;
+  document.getElementById('login-overlay').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('user-badge').textContent = '👁 Visiteur';
+  document.getElementById('user-badge').className = 'badge badge-ice';
+  loadHomeStats();
+  loadCompetitionsDropdowns();
+  loadGlobalData();
+}
+
+// ============================================================
+// AUTH
+// ============================================================
+function switchLoginTab(tab) {
+  document.querySelectorAll('.login-tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='register')));
+  document.getElementById('login-tab').classList.toggle('active', tab==='login');
+  document.getElementById('register-tab').classList.toggle('active', tab==='register');
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-password').value;
+  if (!sb) { showLoginError('Configurez d\'abord Supabase dans l\'onglet Paramètres Admin'); return; }
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) { showLoginError(error.message); return; }
+  await setUser(data.user);
+}
+
+async function doRegister() {
+  const email = document.getElementById('reg-email').value.trim();
+  const pass  = document.getElementById('reg-password').value;
+  if (!sb) { showMsg('register-error','alert-error','Configurez Supabase d\'abord'); return; }
+  const { error } = await sb.auth.signUp({ email, password: pass });
+  if (error) { showMsg('register-error','alert-error',error.message); return; }
+  showMsg('register-success','alert-success','Compte créé ! Vérifiez votre email pour confirmer.');
+}
+
+async function doLogout() {
+  if (sb) await sb.auth.signOut();
+  location.reload();
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('login-error');
+  el.style.display = 'block'; el.textContent = msg;
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-'+id).classList.add('active');
+  const btns = document.querySelectorAll('.nav-btn');
+  btns.forEach(b => { if (b.getAttribute('onclick')?.includes(id)) b.classList.add('active'); });
+}
+
+function switchAdminTab(tab) {
+  document.querySelectorAll('#view-admin .tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#view-admin .tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('admin-tab-'+tab).classList.add('active');
+  // find the button
+  document.querySelectorAll('#view-admin .tab').forEach(t => {
+    if (t.getAttribute('onclick')?.includes("'"+tab+"'")) t.classList.add('active');
+  });
+}
+
+// ============================================================
+// HOME STATS
+// ============================================================
+async function loadHomeStats() {
+  if (!sb) return;
+  const [c, s, e] = await Promise.all([
+    sb.from('competitions').select('id', {count:'exact',head:true}),
+    sb.from('skaters').select('id', {count:'exact',head:true}),
+    sb.from('entries').select('id', {count:'exact',head:true}),
+  ]);
+  document.getElementById('stat-comps').textContent = c.count ?? '—';
+  document.getElementById('stat-skaters').textContent = s.count ?? '—';
+  document.getElementById('stat-entries').textContent = e.count ?? '—';
+}
+
+// ============================================================
+// DROPDOWNS
+// ============================================================
+async function loadCompetitionsDropdowns() {
+  if (!sb) return;
+  const { data } = await sb.from('competitions').select('id,short_name,long_name,date_debut').order('date_debut', {ascending:false});
+  if (!data) return;
+  const ids = ['sel-comp','g-comp','m-entry-comp'];
+  ids.forEach(id => {
+    const sel = document.getElementById(id);
+    const old = sel.value;
+    // keep first option
+    while (sel.options.length > 1) sel.remove(1);
+    data.forEach(c => {
+      const opt = new Option(`${c.short_name} (${c.date_debut?.substring(0,4)||'?'})`, c.id);
+      sel.add(opt);
+    });
+    if (old) sel.value = old;
+  });
+}
+
+async function loadCategories() {
+  const compId = document.getElementById('sel-comp').value;
+  const sel = document.getElementById('sel-cat');
+  while (sel.options.length > 1) sel.remove(1);
+  document.getElementById('sel-seg').innerHTML = '<option value="">— Choisir —</option>';
+  if (!compId || !sb) return;
+  const { data } = await sb.from('categories_segments').select('nom_categorie').eq('competition_id', compId);
+  const cats = [...new Set(data.map(r => r.nom_categorie))];
+  cats.forEach(c => sel.add(new Option(c, c)));
+}
+
+async function loadSegments() {
+  const compId = document.getElementById('sel-comp').value;
+  const cat = document.getElementById('sel-cat').value;
+  const sel = document.getElementById('sel-seg');
+  while (sel.options.length > 1) sel.remove(1);
+  if (!compId || !cat || !sb) return;
+  const { data } = await sb.from('categories_segments').select('id,nom_segment').eq('competition_id', compId).eq('nom_categorie', cat);
+  data.forEach(r => sel.add(new Option(r.nom_segment, r.id)));
+}
+
+async function loadCompResults() {
+  const segId = document.getElementById('sel-seg').value;
+  const tbody = document.getElementById('comp-tbody');
+  if (!segId || !sb) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:2rem">Sélectionnez un segment</td></tr>'; return; }
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="9"><div class="spinner"></div></td></tr>';
+  const { data, error } = await sb.from('entries')
+    .select(`id, rank, starting_number, total_segment_score, total_element_score, total_component_score, total_deductions,
+      s1:skater_1_id(nom, prenom, nation), s2:skater_2_id(nom, prenom, nation)`)
+    .eq('category_segment_id', segId)
+    .order('rank');
+  if (error || !data.length) { tbody.innerHTML = '<tr><td colspan="9"><div class="empty"><div class="empty-icon">🏒</div><p>Aucun résultat</p></div></td></tr>'; return; }
+  tbody.innerHTML = data.map(e => `
+    <tr>
+      <td><span class="rank-badge ${getRankClass(e.rank)}">${e.rank||'—'}</span></td>
+      <td><strong>${skaterName(e)}</strong></td>
+      <td><span class="nation-tag">${e.s1?.nation||'—'}</span></td>
+      <td>${e.starting_number||'—'}</td>
+      <td class="score-highlight">${fmt(e.total_segment_score)}</td>
+      <td>${fmt(e.total_element_score)}</td>
+      <td>${fmt(e.total_component_score)}</td>
+      <td>${e.total_deductions ? '-'+fmt(e.total_deductions) : '0.00'}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="showDetail(${e.id})">Détail</button></td>
+    </tr>`).join('');
+}
+
+// ============================================================
+// SKATER SEARCH
+// ============================================================
+async function searchSkaters() {
+  const nom = document.getElementById('search-nom').value.trim();
+  const prenom = document.getElementById('search-prenom').value.trim();
+  const nation = document.getElementById('search-nation').value.trim().toUpperCase();
+  if (!sb || (nom.length < 2 && prenom.length < 2)) {
+    document.getElementById('skater-suggestions').innerHTML = '';
+    return;
+  }
+  let q = sb.from('skaters').select('id,nom,prenom,nation');
+  if (nom) q = q.ilike('nom', `%${nom}%`);
+  if (prenom) q = q.ilike('prenom', `%${prenom}%`);
+  if (nation) q = q.ilike('nation', `${nation}%`);
+  const { data } = await q.limit(10);
+  if (!data?.length) { document.getElementById('skater-suggestions').innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem">Aucun patineur trouvé</p>'; return; }
+  document.getElementById('skater-suggestions').innerHTML =
+    '<div style="display:flex;flex-wrap:wrap;gap:0.5rem">' +
+    data.map(s => `<button class="btn btn-secondary btn-sm" onclick="loadSkaterHistory(${s.id},'${escHtml(s.prenom+' '+s.nom)}','${s.nation||''}')">
+      ${s.prenom} ${s.nom} <span class="nation-tag">${s.nation||'?'}</span></button>`).join('') + '</div>';
+}
+
+async function loadSkaterHistory(skaterId, name, nation) {
+  document.getElementById('skater-results').style.display = 'block';
+  document.getElementById('skater-header').innerHTML = `<div style="display:flex;align-items:center;gap:1rem"><div><h2 style="font-family:'DM Serif Display',serif;color:var(--white)">${name}</h2><span class="nation-tag">${nation}</span></div></div>`;
+  const tbody = document.getElementById('skater-tbody');
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="10"><div class="spinner"></div></td></tr>';
+  // entries where skater is sk1 or sk2
+  const [r1, r2] = await Promise.all([
+    sb.from('entries').select(`id,rank,total_segment_score,total_element_score,total_component_score,total_deductions,
+      s2:skater_2_id(nom,prenom,nation),
+      cs:category_segment_id(nom_categorie,nom_segment,comp:competition_id(short_name,date_debut))`)
+      .eq('skater_1_id', skaterId).order('id',{ascending:false}),
+    sb.from('entries').select(`id,rank,total_segment_score,total_element_score,total_component_score,total_deductions,
+      s1:skater_1_id(nom,prenom,nation),
+      cs:category_segment_id(nom_categorie,nom_segment,comp:competition_id(short_name,date_debut))`)
+      .eq('skater_2_id', skaterId).order('id',{ascending:false})
+  ]);
+  const rows = [...(r1.data||[]), ...(r2.data||[])].sort((a,b) => new Date(b.cs?.comp?.date_debut||0) - new Date(a.cs?.comp?.date_debut||0));
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="10"><div class="empty"><div class="empty-icon">❄️</div><p>Aucune performance trouvée</p></div></td></tr>'; return; }
+  tbody.innerHTML = rows.map(e => `
+    <tr>
+      <td>${e.cs?.comp?.short_name||'—'}</td>
+      <td>${e.cs?.comp?.date_debut||'—'}</td>
+      <td>${e.cs?.nom_categorie||'—'}</td>
+      <td><span class="badge badge-ice">${e.cs?.nom_segment||'—'}</span></td>
+      <td><span class="rank-badge ${getRankClass(e.rank)}">${e.rank||'—'}</span></td>
+      <td class="score-highlight">${fmt(e.total_segment_score)}</td>
+      <td>${fmt(e.total_element_score)}</td>
+      <td>${fmt(e.total_component_score)}</td>
+      <td>${e.total_deductions ? '-'+fmt(e.total_deductions) : '0.00'}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="showDetail(${e.id})">Détail</button></td>
+    </tr>`).join('');
+}
+
+// ============================================================
+// GLOBAL TABLE
+// ============================================================
+async function loadGlobalData() {
+  if (!sb) return;
+  const { data } = await sb.from('entries')
+    .select(`id,rank,starting_number,total_segment_score,total_element_score,total_component_score,total_deductions,
+      s1:skater_1_id(nom,prenom,nation), s2:skater_2_id(nom,prenom,nation),
+      cs:category_segment_id(nom_categorie,nom_segment,comp:competition_id(short_name,date_debut,lieu))`)
+    .order('id',{ascending:false}).limit(2000);
+  globalData = data || [];
+  populateGlobalFilters();
+  applyGlobalFilters();
+}
+
+function populateGlobalFilters() {
+  const comps = [...new Map(globalData.map(e=>[e.cs?.comp?.short_name, e.cs?.comp?.short_name])).values()].filter(Boolean).sort();
+  const cats  = [...new Set(globalData.map(e=>e.cs?.nom_categorie).filter(Boolean))].sort();
+  const segs  = [...new Set(globalData.map(e=>e.cs?.nom_segment).filter(Boolean))].sort();
+  fillSelect('g-comp', comps); fillSelect('g-cat', cats); fillSelect('g-seg', segs);
+}
+
+function fillSelect(id, items) {
+  const sel = document.getElementById(id);
+  const old = sel.value;
+  while (sel.options.length > 1) sel.remove(1);
+  items.forEach(i => sel.add(new Option(i,i)));
+  if (old) sel.value = old;
+}
+
+function applyGlobalFilters() {
+  const comp    = document.getElementById('g-comp').value;
+  const cat     = document.getElementById('g-cat').value;
+  const seg     = document.getElementById('g-seg').value;
+  const nat     = document.getElementById('g-nat').value.trim().toUpperCase();
+  const name    = document.getElementById('g-name').value.trim().toLowerCase();
+  const scoreMin = parseFloat(document.getElementById('g-score-min').value) || 0;
+  const scoreMax = parseFloat(document.getElementById('g-score-max').value) || Infinity;
+
+  let filtered = globalData.filter(e => {
+    if (comp && e.cs?.comp?.short_name !== comp) return false;
+    if (cat  && e.cs?.nom_categorie !== cat) return false;
+    if (seg  && e.cs?.nom_segment !== seg) return false;
+    if (nat  && !((e.s1?.nation||'').startsWith(nat))) return false;
+    if (name) {
+      const full = skaterName(e).toLowerCase();
+      if (!full.includes(name)) return false;
+    }
+    const score = e.total_segment_score || 0;
+    if (score < scoreMin || score > scoreMax) return false;
+    return true;
+  });
+
+  globalPage = 1;
+  document.getElementById('global-count').textContent = `${filtered.length} performance${filtered.length>1?'s':''} affichée${filtered.length>1?'s':''}`;
+  renderGlobalTable(filtered);
+}
+
+function renderGlobalTable(data) {
+  const start = (globalPage-1)*PAGE_SIZE;
+  const page  = data.slice(start, start+PAGE_SIZE);
+  const tbody = document.getElementById('global-tbody');
+  if (!page.length) { tbody.innerHTML = '<tr><td colspan="11"><div class="empty"><div class="empty-icon">🔍</div><p>Aucune performance correspond aux filtres</p></div></td></tr>'; return; }
+  tbody.innerHTML = page.map(e => `
+    <tr>
+      <td><span class="rank-badge ${getRankClass(e.rank)}">${e.rank||'—'}</span></td>
+      <td><strong>${skaterName(e)}</strong></td>
+      <td><span class="nation-tag">${e.s1?.nation||'—'}</span></td>
+      <td>${e.cs?.comp?.short_name||'—'}</td>
+      <td>${e.cs?.nom_categorie||'—'}</td>
+      <td><span class="badge badge-ice">${e.cs?.nom_segment||'—'}</span></td>
+      <td class="score-highlight">${fmt(e.total_segment_score)}</td>
+      <td>${fmt(e.total_element_score)}</td>
+      <td>${fmt(e.total_component_score)}</td>
+      <td>${e.total_deductions ? '-'+fmt(e.total_deductions) : '0.00'}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="showDetail(${e.id})">Détail</button></td>
+    </tr>`).join('');
+
+  // Pagination
+  const totalPages = Math.ceil(data.length/PAGE_SIZE);
+  const pag = document.getElementById('global-pagination');
+  pag.innerHTML = '';
+  if (totalPages <= 1) return;
+  for (let i=1; i<=totalPages; i++) {
+    const b = document.createElement('button');
+    b.className = 'btn btn-sm ' + (i===globalPage ? 'btn-primary' : 'btn-ghost');
+    b.textContent = i;
+    b.onclick = () => { globalPage = i; renderGlobalTable(data); window.scrollTo(0,0); };
+    pag.appendChild(b);
+  }
+}
+
+function resetGlobalFilters() {
+  ['g-comp','g-cat','g-seg'].forEach(id => document.getElementById(id).value = '');
+  ['g-nat','g-name','g-score-min','g-score-max'].forEach(id => document.getElementById(id).value = '');
+  applyGlobalFilters();
+}
+
+// ============================================================
+// DETAIL MODAL
+// ============================================================
+async function showDetail(entryId) {
+  const modal = document.getElementById('detail-modal');
+  const content = document.getElementById('modal-content');
+  modal.style.display = 'flex';
+  content.innerHTML = '<div style="text-align:center;padding:2rem"><div class="spinner"></div></div>';
+
+  const [{ data: entry }, { data: elems }, { data: comps }] = await Promise.all([
+    sb.from('entries').select(`*,
+      s1:skater_1_id(nom,prenom,nation), s2:skater_2_id(nom,prenom,nation),
+      cs:category_segment_id(nom_categorie,nom_segment,comp:competition_id(short_name,long_name,date_debut,lieu))`).eq('id',entryId).single(),
+    sb.from('executed_elements').select('*').eq('entry_id',entryId).order('sequence_number'),
+    sb.from('program_components').select('*').eq('entry_id',entryId),
+  ]);
+
+  const name = entry ? skaterName(entry) : '—';
+  const comp = entry?.cs?.comp;
+
+  content.innerHTML = `
+    <h2 class="modal-title">${name}</h2>
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem">
+      <span class="badge badge-ice">${comp?.short_name||'—'} · ${comp?.date_debut||''}</span>
+      <span class="badge badge-gold">${entry?.cs?.nom_categorie||'—'} — ${entry?.cs?.nom_segment||'—'}</span>
+      <span class="nation-tag">${entry?.s1?.nation||'—'}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.8rem;margin-bottom:1.5rem">
+      ${statBox('Rang', entry?.rank||'—')}
+      ${statBox('Score total', fmt(entry?.total_segment_score), 'gold')}
+      ${statBox('Éléments', fmt(entry?.total_element_score))}
+      ${statBox('Composantes', fmt(entry?.total_component_score))}
+    </div>
+
+    ${elems?.length ? `
+    <h3 style="color:var(--gold);font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.6rem">Éléments techniques</h3>
+    <div class="table-wrap" style="margin-bottom:1.5rem">
+      <table class="scores-mini">
+        <thead><tr><th>#</th><th>Code</th><th>Base</th><th>GOE</th><th>J1</th><th>J2</th><th>J3</th><th>J4</th><th>J5</th><th>J6</th><th>J7</th><th>J8</th><th>J9</th><th>Panel</th></tr></thead>
+        <tbody>
+        ${elems.map(el => `<tr>
+          <td>${el.sequence_number}</td>
+          <td><strong>${el.element_code}</strong></td>
+          <td>${fmt(el.base_value)}</td>
+          <td class="${(el.goe||0)>=0?'goe-pos':'goe-neg'}">${el.goe>=0?'+':''}${fmt(el.goe)}</td>
+          ${[1,2,3,4,5,6,7,8,9].map(j=>`<td>${el['j'+j+'_note']??'—'}</td>`).join('')}
+          <td class="score-highlight">${fmt(el.score_panel)}</td>
+        </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : ''}
+
+    ${comps?.length ? `
+    <h3 style="color:var(--gold);font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.6rem">Composantes du programme</h3>
+    <div class="table-wrap">
+      <table class="scores-mini">
+        <thead><tr><th>Composante</th><th>Facteur</th><th>J1</th><th>J2</th><th>J3</th><th>J4</th><th>J5</th><th>J6</th><th>J7</th><th>J8</th><th>J9</th><th>Panel</th></tr></thead>
+        <tbody>
+        ${comps.map(c => `<tr>
+          <td>${c.component_name}</td>
+          <td>${c.factor}</td>
+          ${[1,2,3,4,5,6,7,8,9].map(j=>`<td>${c['j'+j+'_note']??'—'}</td>`).join('')}
+          <td class="score-highlight">${fmt(c.score_panel)}</td>
+        </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : ''}
+  `;
+}
+
+function closeModal() { document.getElementById('detail-modal').style.display = 'none'; }
+document.getElementById('detail-modal').addEventListener('click', e => { if (e.target === document.getElementById('detail-modal')) closeModal(); });
+
+function statBox(label, val, color='') {
+  return `<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:0.8rem;text-align:center">
+    <div style="font-size:1.4rem;font-family:'DM Serif Display',serif;color:${color==='gold'?'var(--gold)':'var(--white)'}">${val}</div>
+    <div style="font-size:0.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em">${label}</div>
+  </div>`;
+}
+
+// ============================================================
+// ADMIN — CREATE RECORDS
+// ============================================================
+async function createCompetition() {
+  const payload = {
+    short_name: val('m-comp-short'), long_name: val('m-comp-long'),
+    date_debut: val('m-comp-deb')||null, date_fin: val('m-comp-fin')||null,
+    lieu: val('m-comp-lieu')
+  };
+  if (!payload.short_name) { showMsg('comp-create-msg','alert-error','Le nom court est obligatoire'); return; }
+  const { error } = await sb.from('competitions').insert(payload);
+  if (error) { showMsg('comp-create-msg','alert-error',error.message); return; }
+  showMsg('comp-create-msg','alert-success','✅ Compétition créée !');
+  loadCompetitionsDropdowns(); loadManageComps();
+  ['m-comp-short','m-comp-long','m-comp-deb','m-comp-fin','m-comp-lieu'].forEach(id => document.getElementById(id).value='');
+}
+
+async function createSkater() {
+  const payload = {
+    nom: val('m-sk-nom').toUpperCase(), prenom: val('m-sk-prenom'),
+    nation: val('m-sk-nation').toUpperCase(), genre: val('m-sk-genre')
+  };
+  if (!payload.nom || !payload.prenom) { showMsg('skater-create-msg','alert-error','Nom et prénom obligatoires'); return; }
+  const { error } = await sb.from('skaters').insert(payload);
+  if (error) { showMsg('skater-create-msg','alert-error',error.message); return; }
+  showMsg('skater-create-msg','alert-success','✅ Patineur créé !');
+  loadManageSkaters();
+  ['m-sk-nom','m-sk-prenom','m-sk-nation'].forEach(id => document.getElementById(id).value='');
+}
+
+async function createEntry() {
+  const compId = val('m-entry-comp');
+  const catName = val('m-entry-cat');
+  const segName = val('m-entry-seg');
+  const sk1 = val('m-sk1-id') || null;
+  if (!compId || !catName || !sk1) { showMsg('entry-create-msg','alert-error','Compétition, catégorie et patineur 1 sont obligatoires'); return; }
+
+  // Get or create category_segment
+  let { data: csRows } = await sb.from('categories_segments')
+    .select('id').eq('competition_id',compId).eq('nom_categorie',catName).eq('nom_segment',segName).limit(1);
+  let csId;
+  if (csRows?.length) { csId = csRows[0].id; }
+  else {
+    const { data: newCs, error: csErr } = await sb.from('categories_segments')
+      .insert({ competition_id:compId, nom_categorie:catName, nom_segment:segName }).select('id').single();
+    if (csErr) { showMsg('entry-create-msg','alert-error',csErr.message); return; }
+    csId = newCs.id;
+  }
+
+  const payload = {
+    category_segment_id: csId,
+    skater_1_id: sk1 || null,
+    skater_2_id: val('m-sk2-id') || null,
+    starting_number: intVal('m-sn') || null,
+    rank: intVal('m-rank') || null,
+    total_segment_score: floatVal('m-total') || null,
+    total_element_score: floatVal('m-elem') || null,
+    total_component_score: floatVal('m-comp-score') || null,
+    total_deductions: floatVal('m-ded') || 0
+  };
+  const { error } = await sb.from('entries').insert(payload);
+  if (error) { showMsg('entry-create-msg','alert-error',error.message); return; }
+  showMsg('entry-create-msg','alert-success','✅ Performance créée !');
+  loadGlobalData();
+}
+
+async function searchSkaterForEntry(inputId, hiddenId, listId) {
+  const q = document.getElementById(inputId).value.trim();
+  document.getElementById(hiddenId).value = '';
+  if (!q || q.length < 2 || !sb) return;
+  const { data } = await sb.from('skaters').select('id,nom,prenom,nation').or(`nom.ilike.%${q}%,prenom.ilike.%${q}%`).limit(10);
+  const dl = document.getElementById(listId);
+  dl.innerHTML = '';
+  if (data) data.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = `${s.prenom} ${s.nom} (${s.nation||'?'})`;
+    opt.dataset.id = s.id;
+    dl.appendChild(opt);
+    // Auto-set hidden ID when matched
+    document.getElementById(inputId).addEventListener('input', function() {
+      const match = Array.from(dl.options).find(o => o.value === this.value);
+      if (match) document.getElementById(hiddenId).value = match.dataset.id;
+    });
+  });
+}
+
+// ============================================================
+// ADMIN — MANAGE LISTS
+// ============================================================
+async function loadManageComps() {
+  if (!sb) return;
+  const { data } = await sb.from('competitions').select('*').order('date_debut',{ascending:false});
+  const tbody = document.getElementById('manage-comp-tbody');
+  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="4"><div class="empty"><p>Aucune compétition</p></div></td></tr>'; return; }
+  tbody.innerHTML = data.map(c => `<tr>
+    <td><strong>${c.short_name}</strong><br><small style="color:var(--text-dim)">${c.long_name}</small></td>
+    <td>${c.date_debut||'—'}</td>
+    <td>${c.lieu||'—'}</td>
+    <td><button class="btn btn-danger btn-sm" onclick="deleteRecord('competitions',${c.id},'manage-comp-tbody',loadManageComps)">🗑</button></td>
+  </tr>`).join('');
+}
+
+async function loadManageSkaters() {
+  if (!sb) return;
+  const q = document.getElementById('manage-sk-search')?.value?.trim() || '';
+  let query = sb.from('skaters').select('*').order('nom');
+  if (q) query = query.or(`nom.ilike.%${q}%,prenom.ilike.%${q}%`);
+  const { data } = await query.limit(50);
+  const tbody = document.getElementById('manage-sk-tbody');
+  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="3"><div class="empty"><p>Aucun patineur</p></div></td></tr>'; return; }
+  tbody.innerHTML = data.map(s => `<tr>
+    <td><strong>${s.prenom} ${s.nom}</strong></td>
+    <td><span class="nation-tag">${s.nation||'?'}</span></td>
+    <td><button class="btn btn-danger btn-sm" onclick="deleteRecord('skaters',${s.id},'manage-sk-tbody',loadManageSkaters)">🗑</button></td>
+  </tr>`).join('');
+}
+
+async function deleteRecord(table, id, tbodyId, reloadFn) {
+  if (!confirm('Supprimer cet enregistrement ?')) return;
+  const { error } = await sb.from(table).delete().eq('id', id);
+  if (error) { alert(error.message); return; }
+  reloadFn();
+}
+
+// ============================================================
+// PDF IMPORT — GOOGLE GEMINI
+// ============================================================
+async function handlePdfFile(file) {
+  if (!file) return;
+  const key = document.getElementById('gemini-key').value.trim() || GEMINI_KEY;
+  if (!key) { alert('Entrez votre clé API Gemini d\'abord'); return; }
+
+  const progress = document.getElementById('pdf-progress');
+  const statusText = document.getElementById('pdf-status-text');
+  const fill = document.getElementById('progress-fill');
+  const preview = document.getElementById('ai-preview');
+
+  progress.style.display = 'block';
+  preview.style.display = 'none';
+  setProgress(fill, 10, statusText, 'Lecture du PDF…');
+
+  // Convert PDF to base64
+  const base64 = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+  setProgress(fill, 30, statusText, 'Envoi à Gemini pour analyse…');
+
+  const prompt = `Tu es un expert en patinage artistique. Analyse ce PDF de résultats officiels ISU/Swiss Timing.
+Extrais TOUTES les données et retourne UNIQUEMENT un JSON valide avec cette structure exacte (rien d'autre, pas de markdown) :
+{
+  "competition": {
+    "short_name": "string",
+    "long_name": "string",
+    "date_debut": "YYYY-MM-DD or null",
+    "date_fin": "YYYY-MM-DD or null",
+    "lieu": "string or null"
+  },
+  "nom_categorie": "string (ex: Senior Ladies, Junior Men, Ice Dance...)",
+  "nom_segment": "string (SP, FS, RD, PD, FD)",
+  "entries": [
+    {
+      "rank": number,
+      "starting_number": number,
+      "skater_1": { "nom": "NOM EN MAJUSCULES", "prenom": "Prénom", "nation": "COD" },
+      "skater_2": null,
+      "total_segment_score": number,
+      "total_element_score": number,
+      "total_component_score": number,
+      "total_deductions": number,
+      "executed_elements": [
+        {
+          "sequence_number": number,
+          "element_code": "string",
+          "base_value": number,
+          "goe": number,
+          "j1_note": number, "j2_note": number, "j3_note": number,
+          "j4_note": number, "j5_note": number, "j6_note": number,
+          "j7_note": number, "j8_note": number, "j9_note": number,
+          "score_panel": number
+        }
+      ],
+      "program_components": [
+        {
+          "component_name": "string",
+          "factor": number,
+          "j1_note": number, "j2_note": number, "j3_note": number,
+          "j4_note": number, "j5_note": number, "j6_note": number,
+          "j7_note": number, "j8_note": number, "j9_note": number,
+          "score_panel": number
+        }
+      ]
+    }
+  ]
+}
+Si des notes de juges sont absentes, mets null. Pour les couples/danse, remplis aussi skater_2.`;
+
+  try {
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { inline_data: { mime_type: 'application/pdf', data: base64 } },
+            { text: prompt }
+          ]
+        }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 32000 }
+      })
+    });
+
+    setProgress(fill, 70, statusText, 'Traitement de la réponse…');
+
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error?.message || 'Erreur API Gemini');
+    }
+    const data = await resp.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const clean = text.replace(/```json|```/g, '').trim();
+    aiExtractedData = JSON.parse(clean);
+
+    setProgress(fill, 100, statusText, '✅ Extraction terminée !');
+    renderAiPreview(aiExtractedData);
+    preview.style.display = 'block';
+  } catch(e) {
+    setProgress(fill, 0, statusText, '❌ Erreur : ' + e.message);
+    document.getElementById('ai-preview-content').innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+    preview.style.display = 'block';
+  }
+}
+
+function setProgress(fill, pct, textEl, msg) {
+  fill.style.width = pct + '%';
+  textEl.textContent = msg;
+}
+
+function renderAiPreview(data) {
+  const content = document.getElementById('ai-preview-content');
+  content.innerHTML = `
+    <div class="ai-section">
+      <div class="ai-section-title">Compétition détectée</div>
+      <div style="display:flex;gap:0.8rem;flex-wrap:wrap">
+        <span class="badge badge-gold">${data.competition?.short_name}</span>
+        <span class="badge badge-ice">${data.nom_categorie} — ${data.nom_segment}</span>
+        <span style="color:var(--text-dim);font-size:0.82rem">${data.competition?.lieu||''} · ${data.competition?.date_debut||''}</span>
+      </div>
+    </div>
+    <div class="ai-section">
+      <div class="ai-section-title">${data.entries?.length||0} performances extraites</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Rang</th><th>Patineur</th><th>Nation</th><th>Score total</th><th>Éléments</th><th>Composantes</th></tr></thead>
+          <tbody>
+            ${(data.entries||[]).slice(0,10).map(e => `<tr>
+              <td>${e.rank}</td>
+              <td>${e.skater_1?.prenom} ${e.skater_1?.nom}${e.skater_2 ? ' / '+e.skater_2.prenom+' '+e.skater_2.nom : ''}</td>
+              <td><span class="nation-tag">${e.skater_1?.nation||'?'}</span></td>
+              <td class="score-highlight">${e.total_segment_score}</td>
+              <td>${e.total_element_score}</td>
+              <td>${e.total_component_score}</td>
+            </tr>`).join('')}
+            ${data.entries?.length > 10 ? `<tr><td colspan="6" style="text-align:center;color:var(--text-dim)">… et ${data.entries.length-10} autres</td></tr>` : ''}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+async function importAiData() {
+  if (!aiExtractedData || !sb) return;
+  const d = aiExtractedData;
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '⏳ Import en cours…';
+
+  try {
+    // 1. Upsert competition
+    let { data: compData } = await sb.from('competitions')
+      .select('id').eq('short_name', d.competition.short_name).limit(1);
+    let compId;
+    if (compData?.length) { compId = compData[0].id; }
+    else {
+      const { data: c } = await sb.from('competitions').insert(d.competition).select('id').single();
+      compId = c.id;
+    }
+
+    // 2. Create category_segment
+    const { data: csData } = await sb.from('categories_segments')
+      .insert({ competition_id: compId, nom_categorie: d.nom_categorie, nom_segment: d.nom_segment })
+      .select('id').single();
+    const csId = csData.id;
+
+    // 3. Process each entry
+    for (const e of d.entries) {
+      // Upsert skaters
+      const sk1Id = await upsertSkater(e.skater_1);
+      const sk2Id = e.skater_2 ? await upsertSkater(e.skater_2) : null;
+
+      // Insert entry
+      const { data: entryData } = await sb.from('entries').insert({
+        category_segment_id: csId,
+        skater_1_id: sk1Id, skater_2_id: sk2Id,
+        rank: e.rank, starting_number: e.starting_number,
+        total_segment_score: e.total_segment_score,
+        total_element_score: e.total_element_score,
+        total_component_score: e.total_component_score,
+        total_deductions: e.total_deductions || 0
+      }).select('id').single();
+      const entryId = entryData.id;
+
+      // Insert elements
+      if (e.executed_elements?.length) {
+        await sb.from('executed_elements').insert(e.executed_elements.map(el => ({ ...el, entry_id: entryId })));
+      }
+      // Insert components
+      if (e.program_components?.length) {
+        await sb.from('program_components').insert(e.program_components.map(c => ({ ...c, entry_id: entryId })));
+      }
+    }
+
+    btn.textContent = '✅ Importé avec succès !';
+    btn.style.background = 'var(--success)';
+    loadHomeStats(); loadGlobalData(); loadCompetitionsDropdowns();
+  } catch(err) {
+    btn.textContent = '❌ Erreur — réessayer';
+    btn.disabled = false;
+    alert('Erreur lors de l\'import : ' + err.message);
+  }
+}
+
+async function upsertSkater(s) {
+  if (!s) return null;
+  const { data: existing } = await sb.from('skaters')
+    .select('id').eq('nom', s.nom.toUpperCase()).eq('prenom', s.prenom).limit(1);
+  if (existing?.length) return existing[0].id;
+  const { data: newSk } = await sb.from('skaters').insert({
+    nom: s.nom.toUpperCase(), prenom: s.prenom,
+    nation: s.nation || null, genre: null
+  }).select('id').single();
+  return newSk.id;
+}
+
+function editAiData() {
+  const box = document.getElementById('ai-preview-content');
+  box.innerHTML = `
+    <div class="ai-section-title">JSON brut (modifiable)</div>
+    <textarea class="form-control ai-json-box" id="ai-raw-json" style="height:300px;resize:vertical">${JSON.stringify(aiExtractedData, null, 2)}</textarea>
+    <button class="btn btn-secondary btn-sm" style="margin-top:0.5rem" onclick="applyEditedJson()">✅ Appliquer les modifications</button>
+  `;
+}
+
+function applyEditedJson() {
+  try {
+    aiExtractedData = JSON.parse(document.getElementById('ai-raw-json').value);
+    renderAiPreview(aiExtractedData);
+    alert('JSON mis à jour !');
+  } catch(e) { alert('JSON invalide : ' + e.message); }
+}
+
+function saveGeminiKey() {
+  const key = document.getElementById('gemini-key').value.trim();
+  localStorage.setItem('gemini_key', key);
+  GEMINI_KEY = key;
+  alert('Clé Gemini sauvegardée localement');
+}
+
+// ============================================================
+// CONFIG
+// ============================================================
+function saveConfig() {
+  const url = document.getElementById('cfg-url').value.trim();
+  const key = document.getElementById('cfg-key').value.trim();
+  if (!url || !key) { showMsg('cfg-msg','alert-error','Les deux champs sont obligatoires'); return; }
+  localStorage.setItem('sb_url', url);
+  localStorage.setItem('sb_key', key);
+  showMsg('cfg-msg','alert-success','✅ Configuration sauvegardée. Rechargement…');
+  setTimeout(() => location.reload(), 1200);
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function fmt(n) { return n != null ? parseFloat(n).toFixed(2) : '—'; }
+function val(id) { return document.getElementById(id)?.value?.trim() || ''; }
+function intVal(id) { const v = parseInt(val(id)); return isNaN(v) ? null : v; }
+function floatVal(id) { const v = parseFloat(val(id)); return isNaN(v) ? null : v; }
+function escHtml(s) { return s?.replace(/'/g,"\\'") || ''; }
+
+function skaterName(e) {
+  const s1 = e.s1 || e.skater_1;
+  const s2 = e.s2 || e.skater_2;
+  if (!s1) return '—';
+  const n1 = `${s1.prenom||''} ${s1.nom||''}`.trim();
+  if (!s2) return n1;
+  const n2 = `${s2.prenom||''} ${s2.nom||''}`.trim();
+  return `${n1} / ${n2}`;
+}
+
+function getRankClass(rank) {
+  if (rank === 1) return 'rank-1';
+  if (rank === 2) return 'rank-2';
+  if (rank === 3) return 'rank-3';
+  return 'rank-other';
+}
+
+function showMsg(id, cls, msg) {
+  const el = document.getElementById(id);
+  el.className = 'alert ' + cls;
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 5000);
+}
+
+// Drag-and-drop on drop zone
+const dz = document.getElementById('drop-zone');
+dz?.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragging'); });
+dz?.addEventListener('dragleave', () => dz.classList.remove('dragging'));
+dz?.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('dragging'); handlePdfFile(e.dataTransfer.files[0]); });
+
+// ============================================================
+// START
+// ============================================================
+boot();
+</script>
+</body>
+</html>
