@@ -787,8 +787,11 @@ async function boot() {
 
   // Si une session admin est déjà active (cookie), on la restaure silencieusement
   const { data: { session } } = await sb.auth.getSession();
-  if (session) {
+  if (session && session.user?.user_metadata?.role === 'admin') {
     await setUser(session.user);
+  } else if (session) {
+    // Session non-admin : on la ferme et on reste visiteur
+    await sb.auth.signOut();
   }
 }
 
