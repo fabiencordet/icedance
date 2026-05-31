@@ -337,52 +337,30 @@
 </head>
 <body>
 
-<!-- ===== LOGIN OVERLAY ===== -->
-<div id="login-overlay">
+<!-- ===== ADMIN LOGIN MODAL (discret) ===== -->
+<div id="login-overlay" style="display:none">
   <div class="login-box">
     <div class="logo"><span class="logo-icon">⛸</span> Ice<span>Stats</span></div>
-    <p class="login-subtitle">Plateforme d'analyse de patinage artistique</p>
-
-    <div class="login-tabs">
-      <button class="login-tab active" onclick="switchLoginTab('login')">Connexion</button>
-      <button class="login-tab" onclick="switchLoginTab('register')">Inscription</button>
+    <p class="login-subtitle">Connexion administrateur</p>
+    <div class="form-group">
+      <label>Email</label>
+      <input class="form-control" type="email" id="login-email" placeholder="votre@email.com" />
     </div>
-
-    <div id="login-tab" class="tab-content active">
-      <div class="form-group">
-        <label>Email</label>
-        <input class="form-control" type="email" id="login-email" placeholder="votre@email.com" />
-      </div>
-      <div class="form-group">
-        <label>Mot de passe</label>
-        <input class="form-control" type="password" id="login-password" placeholder="••••••••" />
-      </div>
-      <div id="login-error" class="alert alert-error" style="display:none"></div>
-      <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Se connecter</button>
-      <p style="margin-top:1rem; font-size:0.8rem; color:var(--text-dim)">
-        Ou continuer sans compte (lecture seule) —
-        <a href="#" style="color:var(--gold)" onclick="continueAsGuest()">Accès visiteur</a>
-      </p>
+    <div class="form-group">
+      <label>Mot de passe</label>
+      <input class="form-control" type="password" id="login-password" placeholder="••••••••"
+        onkeydown="if(event.key==='Enter') doLogin()" />
     </div>
-
-    <div id="register-tab" class="tab-content">
-      <div class="form-group">
-        <label>Email</label>
-        <input class="form-control" type="email" id="reg-email" placeholder="votre@email.com" />
-      </div>
-      <div class="form-group">
-        <label>Mot de passe</label>
-        <input class="form-control" type="password" id="reg-password" placeholder="••••••••" />
-      </div>
-      <div id="register-error" class="alert alert-error" style="display:none"></div>
-      <div id="register-success" class="alert alert-success" style="display:none"></div>
-      <button class="btn btn-primary" style="width:100%" onclick="doRegister()">Créer un compte</button>
+    <div id="login-error" class="alert alert-error" style="display:none"></div>
+    <div style="display:flex;gap:0.7rem">
+      <button class="btn btn-primary" style="flex:1" onclick="doLogin()">Se connecter</button>
+      <button class="btn btn-ghost" onclick="closeLoginModal()">Annuler</button>
     </div>
   </div>
 </div>
 
 <!-- ===== APP ===== -->
-<div id="app" style="display:none">
+<div id="app">
 
   <header>
     <div class="logo"><span class="logo-icon">⛸</span> Ice<span>Stats</span></div>
@@ -394,8 +372,9 @@
       <button class="nav-btn admin-only" id="nav-admin" style="display:none" onclick="showView('admin')">⚙ Admin</button>
     </nav>
     <div id="auth-area">
-      <span id="user-badge" class="badge"></span>
-      <button class="btn btn-ghost btn-sm" onclick="doLogout()">Déconnexion</button>
+      <span id="user-badge" class="badge" style="display:none"></span>
+      <button id="btn-admin-login" class="btn btn-ghost btn-sm" onclick="openLoginModal()" title="Connexion administrateur">🔑</button>
+      <button id="btn-logout" class="btn btn-ghost btn-sm" style="display:none" onclick="doLogout()">Déconnexion</button>
     </div>
   </header>
 
@@ -770,8 +749,8 @@
 // CONFIG — Remplacez ces valeurs par les vôtres
 // (ou utilisez l'onglet Paramètres dans l'admin)
 // ============================================================
-let SUPABASE_URL = localStorage.getItem('sb_url') || 'https://wsrqqffczkthpljvocql.supabase.co';
-let SUPABASE_KEY = localStorage.getItem('sb_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzcnFxZmZjemt0aHBsanZvY3FsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjY1NDUsImV4cCI6MjA5NTgwMjU0NX0.-_rAFqx8dCQ-IOOTDuz2XVkOM2UxYeYMU8DkHBiEhC0';
+let SUPABASE_URL = localStorage.getItem('sb_url') || 'VOTRE_URL_SUPABASE';
+let SUPABASE_KEY = localStorage.getItem('sb_key') || 'VOTRE_CLE_ANON_SUPABASE';
 let GEMINI_KEY   = localStorage.getItem('gemini_key') || '';
 
 let sb = null;
@@ -795,20 +774,16 @@ function initSupabase() {
 
 async function boot() {
   // Pré-remplir les champs config
-  document.getElementById('cfg-url').value = SUPABASE_URL !== 'VOTRE_URL_SUPABASE' ? SUPABASE_URL : '';
-  document.getElementById('cfg-key').value = SUPABASE_KEY !== 'VOTRE_CLE_ANON_SUPABASE' ? SUPABASE_KEY : '';
-  if (GEMINI_KEY) document.getElementById('gemini-key').value = GEMINI_KEY;
+  if (document.getElementById('cfg-url')) document.getElementById('cfg-url').value = SUPABASE_URL !== 'VOTRE_URL_SUPABASE' ? SUPABASE_URL : '';
+  if (document.getElementById('cfg-key')) document.getElementById('cfg-key').value = SUPABASE_KEY !== 'VOTRE_CLE_ANON_SUPABASE' ? SUPABASE_KEY : '';
+  if (GEMINI_KEY && document.getElementById('gemini-key')) document.getElementById('gemini-key').value = GEMINI_KEY;
 
-  if (!initSupabase()) {
-    // Montrer l'app en mode config
-    document.getElementById('login-overlay').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    showView('admin');
-    switchAdminTab('settings');
-    showMsg('cfg-msg', 'alert-info', '⚠️ Configurez d\'abord votre URL et clé Supabase ci-dessus.');
-    return;
-  }
+  // L'app est toujours visible — on démarre en mode visiteur par défaut
+  initAsGuest();
 
+  if (!initSupabase()) return;
+
+  // Si une session admin est déjà active (cookie), on la restaure silencieusement
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
     await setUser(session.user);
@@ -819,12 +794,18 @@ async function setUser(user) {
   currentUser = user;
   isAdmin = user?.user_metadata?.role === 'admin';
   document.getElementById('login-overlay').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-  document.getElementById('user-badge').textContent = isAdmin ? '⭐ Admin' : '👤 Visiteur';
-  document.getElementById('user-badge').className = 'badge ' + (isAdmin ? 'badge-admin' : 'badge-ice');
+  const badge = document.getElementById('user-badge');
+  badge.style.display = 'inline-block';
+  badge.textContent = isAdmin ? '⭐ Admin' : '👤';
+  badge.className = 'badge ' + (isAdmin ? 'badge-admin' : 'badge-ice');
+  document.getElementById('btn-admin-login').style.display = 'none';
+  document.getElementById('btn-logout').style.display = isAdmin ? 'inline-flex' : 'none';
   if (isAdmin) {
     document.getElementById('nav-admin').style.display = 'inline-block';
-    document.getElementById('my-user-id').value = user.id;
+    if (document.getElementById('my-user-id')) document.getElementById('my-user-id').value = user.id;
+    if (document.getElementById('cfg-url')) document.getElementById('cfg-url').value = SUPABASE_URL !== 'VOTRE_URL_SUPABASE' ? SUPABASE_URL : '';
+    if (document.getElementById('cfg-key')) document.getElementById('cfg-key').value = SUPABASE_KEY !== 'VOTRE_CLE_ANON_SUPABASE' ? SUPABASE_KEY : '';
+    if (GEMINI_KEY && document.getElementById('gemini-key')) document.getElementById('gemini-key').value = GEMINI_KEY;
   }
   loadHomeStats();
   loadCompetitionsDropdowns();
@@ -832,12 +813,12 @@ async function setUser(user) {
   if (isAdmin) { loadManageComps(); loadManageSkaters(); }
 }
 
-function continueAsGuest() {
+function initAsGuest() {
   currentUser = null; isAdmin = false;
-  document.getElementById('login-overlay').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-  document.getElementById('user-badge').textContent = '👁 Visiteur';
-  document.getElementById('user-badge').className = 'badge badge-ice';
+  document.getElementById('user-badge').style.display = 'none';
+  document.getElementById('btn-admin-login').style.display = 'inline-flex';
+  document.getElementById('btn-logout').style.display = 'none';
+  document.getElementById('nav-admin').style.display = 'none';
   loadHomeStats();
   loadCompetitionsDropdowns();
   loadGlobalData();
@@ -846,33 +827,36 @@ function continueAsGuest() {
 // ============================================================
 // AUTH
 // ============================================================
-function switchLoginTab(tab) {
-  document.querySelectorAll('.login-tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='register')));
-  document.getElementById('login-tab').classList.toggle('active', tab==='login');
-  document.getElementById('register-tab').classList.toggle('active', tab==='register');
+function openLoginModal() {
+  document.getElementById('login-overlay').style.display = 'flex';
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-password').value = '';
+  document.getElementById('login-error').style.display = 'none';
+  setTimeout(() => document.getElementById('login-email').focus(), 100);
+}
+
+function closeLoginModal() {
+  document.getElementById('login-overlay').style.display = 'none';
 }
 
 async function doLogin() {
   const email = document.getElementById('login-email').value.trim();
   const pass  = document.getElementById('login-password').value;
-  if (!sb) { showLoginError('Configurez d\'abord Supabase dans l\'onglet Paramètres Admin'); return; }
+  if (!email || !pass) { showLoginError('Email et mot de passe requis'); return; }
+  if (!initSupabase()) { showLoginError('Supabase non configuré — vérifiez l\'URL et la clé dans le code'); return; }
   const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
   if (error) { showLoginError(error.message); return; }
+  if (data.user?.user_metadata?.role !== 'admin') {
+    await sb.auth.signOut();
+    showLoginError('Ce compte n\'a pas les droits admin.');
+    return;
+  }
   await setUser(data.user);
-}
-
-async function doRegister() {
-  const email = document.getElementById('reg-email').value.trim();
-  const pass  = document.getElementById('reg-password').value;
-  if (!sb) { showMsg('register-error','alert-error','Configurez Supabase d\'abord'); return; }
-  const { error } = await sb.auth.signUp({ email, password: pass });
-  if (error) { showMsg('register-error','alert-error',error.message); return; }
-  showMsg('register-success','alert-success','Compte créé ! Vérifiez votre email pour confirmer.');
 }
 
 async function doLogout() {
   if (sb) await sb.auth.signOut();
-  location.reload();
+  initAsGuest();
 }
 
 function showLoginError(msg) {
