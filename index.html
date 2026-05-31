@@ -327,6 +327,29 @@
       nav { display: none; }
     }
 
+    /* ===== GLOBAL TABLE COMPACT ===== */
+    #global-tbody td, #global-thead th { 
+      padding: 0.5rem 0.55rem; 
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+    #global-thead th { font-size: 0.7rem; }
+    .global-table-wrap { overflow-x: auto; }
+    .global-table-wrap table { width: 100%; table-layout: fixed; }
+    .global-table-wrap th:nth-child(1)  { width: 160px; } /* Patineur */
+    .global-table-wrap th:nth-child(2)  { width: 52px;  } /* Nation */
+    .global-table-wrap th:nth-child(3)  { width: 48px;  } /* Année */
+    .global-table-wrap th:nth-child(4)  { width: 140px; } /* Compétition */
+    .global-table-wrap th:nth-child(5)  { width: 68px;  } /* Saison */
+    .global-table-wrap th:nth-child(6)  { width: 110px; } /* Catégorie */
+    .global-table-wrap th:nth-child(7)  { width: 46px;  } /* Segment */
+    .global-table-wrap th:nth-child(8)  { width: 74px;  } /* Score total */
+    .global-table-wrap th:nth-child(9)  { width: 64px;  } /* Éléments */
+    .global-table-wrap th:nth-child(10) { width: 74px;  } /* Composantes */
+    .global-table-wrap th:nth-child(11) { width: 64px;  } /* Déductions */
+    .global-table-wrap th:nth-child(12) { width: 100px; } /* Actions */
+    .global-table-wrap td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
     /* ===== PROGRESS BAR ===== */
     .progress-bar { height: 4px; background: var(--navy-light); border-radius: 2px; overflow: hidden; margin-top: 0.5rem; }
     .progress-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-light)); transition: width 0.3s; }
@@ -567,9 +590,7 @@
         <div id="global-count" style="color:var(--text-dim);font-size:0.82rem;margin-bottom:1rem"></div>
       </div>
       <div class="card">
-        <div class="table-wrap">
-          <table>
-            <thead id="global-thead"><tr>
+        <div class="table-wrap global-table-wrap">
               <th>Patineur(s)</th><th>Nation</th><th>Année</th><th>Compétition</th>
               <th>Saison</th><th>Catégorie</th><th>Segment</th><th>Score total</th>
               <th>Éléments</th><th>Composantes</th><th>Déductions</th><th></th>
@@ -760,6 +781,24 @@
             </div>
           </div>
         </div>
+        <!-- Catégories & Segments -->
+        <div class="card" style="margin-top:1.5rem">
+          <div class="card-title">📂 Catégories &amp; Segments</div>
+          <div class="form-group" style="max-width:320px">
+            <label>Filtrer par compétition</label>
+            <select class="form-control" id="manage-cs-comp" onchange="loadManageCatSegs()">
+              <option value="">— Toutes —</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Compétition</th><th>Catégorie</th><th>Segment</th><th>Performances</th><th></th></tr></thead>
+              <tbody id="manage-cs-tbody">
+                <tr class="loading-row"><td colspan="5"><div class="spinner"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <!-- TAB: PARAMÈTRES -->
@@ -923,7 +962,7 @@ async function setUser(user) {
   loadHomeStats();
   loadCompetitionsDropdowns();
   loadGlobalData();
-  if (isAdmin) { loadManageComps(); loadManageSkaters(); }
+  if (isAdmin) { loadManageComps(); loadManageSkaters(); populateManageCsCompDropdown(); loadManageCatSegs(); }
 }
 
 function initAsGuest() {
@@ -1032,6 +1071,14 @@ async function loadCompetitionsDropdowns() {
     });
     if (old) sel.value = old;
   });
+  // Also refresh manage cat/seg dropdown if present
+  const mcs = document.getElementById('manage-cs-comp');
+  if (mcs) {
+    const old = mcs.value;
+    while (mcs.options.length > 1) mcs.remove(1);
+    data.forEach(c => mcs.add(new Option(`${c.short_name} (${c.date_debut?.substring(0,4)||'?'})`, c.id)));
+    if (old) mcs.value = old;
+  }
 }
 
 async function loadCategories() {
@@ -1280,8 +1327,8 @@ function toggleColFilterDropdown(colKey, btnEl) {
     <input type="text" placeholder="Rechercher…" oninput="filterDropdownSearch(this,'${colKey}')" />
     <div id="col-filter-list-${colKey}">
       ${values.map(([val, count]) => `
-        <label class="col-filter-opt ${selected.has(val)?'selected':''}">
-          <input type="checkbox" value="${escHtml(val)}" ${selected.has(val)?'checked':''} onchange="toggleColFilterVal('${colKey}',this.value,this.checked)" />
+        <label class="col-filter-opt ${selected.has(val)?'selected':''}" data-val="${escHtml(val)}">
+          <input type="checkbox" ${selected.has(val)?'checked':''} data-col="${colKey}" data-val="${escHtml(val)}" onchange="toggleColFilterVal('${colKey}',this.dataset.val,this.checked)" />
           <span>${escHtml(val)}</span>
           <span style="margin-left:auto;color:var(--text-dim);font-size:0.75rem">${count}</span>
         </label>`).join('')}
@@ -1461,20 +1508,75 @@ function resetGlobalFilters() {
 async function openEditEntry(id) {
   const { data: e } = await sb.from('entries')
     .select(`id,rank,starting_number,total_segment_score,total_element_score,total_component_score,total_deductions,
-      s1:skater_1_id(nom,prenom,nation), s2:skater_2_id(nom,prenom,nation),
-      cs:category_segment_id(nom_categorie,nom_segment,comp:competition_id(long_name,short_name,date_debut))`)
+      skater_1_id, skater_2_id, category_segment_id,
+      s1:skater_1_id(id,nom,prenom,nation), s2:skater_2_id(id,nom,prenom,nation),
+      cs:category_segment_id(id,nom_categorie,nom_segment,competition_id,comp:competition_id(id,long_name,short_name,date_debut))`)
     .eq('id', id).single();
   if (!e) return;
 
-  const skName = skaterName(e);
-  const compLabel = e.cs?.comp?.long_name || e.cs?.comp?.short_name || '—';
+  // Load competitions for dropdown
+  const { data: comps } = await sb.from('competitions').select('id,short_name,long_name,date_debut').order('date_debut',{ascending:false});
+  // Load all categories_segments
+  const { data: allCs } = await sb.from('categories_segments').select('id,nom_categorie,nom_segment,competition_id').order('nom_categorie');
+
+  const compOptions = (comps||[]).map(c =>
+    `<option value="${c.id}" ${c.id === e.cs?.comp?.id ? 'selected' : ''}>${escHtml(c.short_name)} (${c.date_debut?.substring(0,4)||'?'})</option>`
+  ).join('');
+
+  // Build unique categories from allCs for currently selected comp
+  const currentCompId = e.cs?.competition_id;
+  const catsForComp = [...new Set((allCs||[]).filter(cs => cs.competition_id === currentCompId).map(cs => cs.nom_categorie))];
+  const segsForCat = (allCs||[]).filter(cs => cs.competition_id === currentCompId && cs.nom_categorie === e.cs?.nom_categorie);
+
+  const catOptions = catsForComp.map(c =>
+    `<option value="${escHtml(c)}" ${c === e.cs?.nom_categorie ? 'selected' : ''}>${escHtml(c)}</option>`
+  ).join('');
+  const segOptions = segsForCat.map(cs =>
+    `<option value="${cs.id}" ${cs.id === e.category_segment_id ? 'selected' : ''}>${escHtml(cs.nom_segment)}</option>`
+  ).join('');
+
+  const sk1Name = e.s1 ? `${e.s1.prenom} ${e.s1.nom} (${e.s1.nation||'?'})` : '';
+  const sk2Name = e.s2 ? `${e.s2.prenom} ${e.s2.nom} (${e.s2.nation||'?'})` : '';
 
   const content = document.getElementById('edit-modal-content');
+  // Store allCs in window for dynamic update
+  window._editEntryAllCs = allCs || [];
+
   content.innerHTML = `
     <h2 class="modal-title">✏️ Modifier la performance</h2>
-    <div style="background:rgba(255,255,255,0.04);border-radius:var(--radius-sm);padding:0.8rem 1rem;margin-bottom:1.2rem;font-size:0.85rem;color:var(--text-dim)">
-      <strong style="color:var(--text)">${skName}</strong> · ${compLabel}<br>
-      <span>${e.cs?.nom_categorie||''} — ${e.cs?.nom_segment||''}</span>
+    <div class="form-group">
+      <label>Compétition</label>
+      <select class="form-control" id="ee-comp" onchange="onEditEntryCompChange()">
+        <option value="">— Choisir —</option>${compOptions}
+      </select>
+    </div>
+    <div class="form-row form-row-2">
+      <div class="form-group">
+        <label>Catégorie</label>
+        <select class="form-control" id="ee-cat" onchange="onEditEntryCatChange()">
+          <option value="">— Choisir —</option>${catOptions}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Segment</label>
+        <select class="form-control" id="ee-seg">
+          <option value="">— Choisir —</option>${segOptions}
+        </select>
+      </div>
+    </div>
+    <div class="form-row form-row-2">
+      <div class="form-group">
+        <label>Patineur 1</label>
+        <input class="form-control" id="ee-sk1-search" placeholder="Chercher nom…" value="${escHtml(sk1Name)}" oninput="searchSkaterInline('ee-sk1-search','ee-sk1-id','ee-sk1-list')" />
+        <datalist id="ee-sk1-list"></datalist>
+        <input type="hidden" id="ee-sk1-id" value="${e.skater_1_id||''}" />
+      </div>
+      <div class="form-group">
+        <label>Patineur 2 (couples)</label>
+        <input class="form-control" id="ee-sk2-search" placeholder="Chercher nom…" value="${escHtml(sk2Name)}" oninput="searchSkaterInline('ee-sk2-search','ee-sk2-id','ee-sk2-list')" />
+        <datalist id="ee-sk2-list"></datalist>
+        <input type="hidden" id="ee-sk2-id" value="${e.skater_2_id||''}" />
+      </div>
     </div>
     <div class="form-row form-row-2">
       <div class="form-group"><label>Rang</label><input class="form-control" type="number" id="ee-rank" value="${e.rank||''}" min="1" /></div>
@@ -1485,7 +1587,7 @@ async function openEditEntry(id) {
       <div class="form-group"><label>Éléments</label><input class="form-control" type="number" step="0.01" id="ee-elem" value="${e.total_element_score||''}" /></div>
     </div>
     <div class="form-row form-row-2">
-      <div class="form-group"><label>Composantes</label><input class="form-control" type="number" step="0.01" id="ee-comp" value="${e.total_component_score||''}" /></div>
+      <div class="form-group"><label>Composantes</label><input class="form-control" type="number" step="0.01" id="ee-comp-score" value="${e.total_component_score||''}" /></div>
       <div class="form-group"><label>Déductions</label><input class="form-control" type="number" step="0.01" id="ee-ded" value="${e.total_deductions||0}" min="0" /></div>
     </div>
     <div id="edit-entry-msg" class="alert" style="display:none;margin-bottom:0.8rem"></div>
@@ -1497,15 +1599,63 @@ async function openEditEntry(id) {
   document.getElementById('edit-modal').style.display = 'flex';
 }
 
+function onEditEntryCompChange() {
+  const compId = parseInt(document.getElementById('ee-comp').value);
+  const allCs = window._editEntryAllCs || [];
+  const cats = [...new Set(allCs.filter(cs => cs.competition_id === compId).map(cs => cs.nom_categorie))];
+  const catSel = document.getElementById('ee-cat');
+  catSel.innerHTML = '<option value="">— Choisir —</option>' + cats.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
+  document.getElementById('ee-seg').innerHTML = '<option value="">— Choisir —</option>';
+}
+
+function onEditEntryCatChange() {
+  const compId = parseInt(document.getElementById('ee-comp').value);
+  const cat = document.getElementById('ee-cat').value;
+  const allCs = window._editEntryAllCs || [];
+  const segs = allCs.filter(cs => cs.competition_id === compId && cs.nom_categorie === cat);
+  const segSel = document.getElementById('ee-seg');
+  segSel.innerHTML = '<option value="">— Choisir —</option>' + segs.map(cs => `<option value="${cs.id}">${escHtml(cs.nom_segment)}</option>`).join('');
+}
+
+async function searchSkaterInline(inputId, hiddenId, listId) {
+  const q = document.getElementById(inputId).value.trim();
+  if (!q || q.length < 2 || !sb) return;
+  const { data } = await sb.from('skaters').select('id,nom,prenom,nation').or(`nom.ilike.%${q}%,prenom.ilike.%${q}%`).limit(10);
+  const dl = document.getElementById(listId);
+  dl.innerHTML = '';
+  if (data) data.forEach(s => {
+    const opt = document.createElement('option');
+    const label = `${s.prenom} ${s.nom} (${s.nation||'?'})`;
+    opt.value = label;
+    opt.dataset.id = s.id;
+    dl.appendChild(opt);
+  });
+  // Auto-set hidden ID when value matches an option
+  document.getElementById(inputId).oninput = function() {
+    searchSkaterInline(inputId, hiddenId, listId);
+    const match = Array.from(document.getElementById(listId).options).find(o => o.value === this.value);
+    if (match) document.getElementById(hiddenId).value = match.dataset.id;
+    else document.getElementById(hiddenId).value = '';
+  };
+}
+
 async function saveEditEntry(id) {
+  const segId = document.getElementById('ee-seg').value;
+  const sk1Id = document.getElementById('ee-sk1-id').value || null;
+  const sk2Id = document.getElementById('ee-sk2-id').value || null;
   const payload = {
     rank:                  parseInt(document.getElementById('ee-rank').value) || null,
     starting_number:       parseInt(document.getElementById('ee-start').value) || null,
     total_segment_score:   parseFloat(document.getElementById('ee-total').value) || null,
     total_element_score:   parseFloat(document.getElementById('ee-elem').value) || null,
-    total_component_score: parseFloat(document.getElementById('ee-comp').value) || null,
-    total_deductions:      parseFloat(document.getElementById('ee-ded').value) || 0
+    total_component_score: parseFloat(document.getElementById('ee-comp-score').value) || null,
+    total_deductions:      parseFloat(document.getElementById('ee-ded').value) || 0,
+    skater_1_id:           sk1Id || undefined,
+    skater_2_id:           sk2Id,
   };
+  if (segId) payload.category_segment_id = parseInt(segId);
+  // Remove undefined keys
+  Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
   const { error } = await sb.from('entries').update(payload).eq('id', id);
   if (error) { showMsg('edit-entry-msg','alert-error',error.message); return; }
   closeEditModal();
@@ -1772,6 +1922,109 @@ async function loadManageSkaters() {
       <button class="btn btn-danger btn-sm" onclick="deleteRecord('skaters',${s.id},'manage-sk-tbody',loadManageSkaters)">🗑</button>
     </td>
   </tr>`).join('');
+}
+
+async function populateManageCsCompDropdown() {
+  if (!sb) return;
+  const { data } = await sb.from('competitions').select('id,short_name,date_debut').order('date_debut',{ascending:false});
+  const sel = document.getElementById('manage-cs-comp');
+  if (!sel) return;
+  while (sel.options.length > 1) sel.remove(1);
+  (data||[]).forEach(c => sel.add(new Option(`${c.short_name} (${c.date_debut?.substring(0,4)||'?'})`, c.id)));
+}
+
+async function loadManageCatSegs() {
+  if (!sb) return;
+  const compId = document.getElementById('manage-cs-comp')?.value || '';
+  let query = sb.from('categories_segments')
+    .select('id,nom_categorie,nom_segment,competition_id,comp:competition_id(short_name,date_debut)')
+    .order('nom_categorie');
+  if (compId) query = query.eq('competition_id', compId);
+  const { data } = await query.limit(200);
+  const tbody = document.getElementById('manage-cs-tbody');
+  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="5"><div class="empty"><p>Aucune catégorie/segment</p></div></td></tr>'; return; }
+
+  // Count entries per category_segment
+  const ids = data.map(cs => cs.id);
+  const { data: counts } = await sb.from('entries').select('category_segment_id').in('category_segment_id', ids);
+  const countMap = {};
+  (counts||[]).forEach(e => { countMap[e.category_segment_id] = (countMap[e.category_segment_id]||0) + 1; });
+
+  tbody.innerHTML = data.map(cs => `<tr>
+    <td><small style="color:var(--text-dim)">${escHtml(cs.comp?.short_name||'—')}</small></td>
+    <td>${escHtml(cs.nom_categorie)}</td>
+    <td><span class="badge badge-ice">${escHtml(cs.nom_segment)}</span></td>
+    <td style="color:var(--text-dim);text-align:center">${countMap[cs.id]||0}</td>
+    <td style="display:flex;gap:0.4rem">
+      <button class="btn btn-secondary btn-sm" onclick="openEditCatSeg(${cs.id})">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteCatSeg(${cs.id})">🗑</button>
+    </td>
+  </tr>`).join('');
+}
+
+async function openEditCatSeg(id) {
+  const { data: cs } = await sb.from('categories_segments').select('*,comp:competition_id(short_name)').eq('id',id).single();
+  if (!cs) return;
+  const { data: comps } = await sb.from('competitions').select('id,short_name,date_debut').order('date_debut',{ascending:false});
+  const compOptions = (comps||[]).map(c =>
+    `<option value="${c.id}" ${c.id === cs.competition_id ? 'selected':''}>${escHtml(c.short_name)} (${c.date_debut?.substring(0,4)||'?'})</option>`
+  ).join('');
+  const content = document.getElementById('edit-modal-content');
+  content.innerHTML = `
+    <h2 class="modal-title">✏️ Modifier catégorie / segment</h2>
+    <div class="form-group">
+      <label>Compétition</label>
+      <select class="form-control" id="ecs-comp"><option value="">— Choisir —</option>${compOptions}</select>
+    </div>
+    <div class="form-group">
+      <label>Catégorie</label>
+      <input class="form-control" id="ecs-cat" value="${escHtml(cs.nom_categorie)}" placeholder="Senior Ladies" />
+    </div>
+    <div class="form-group">
+      <label>Segment</label>
+      <select class="form-control" id="ecs-seg">
+        ${['SP','FS','RD','PD','FD'].map(s => `<option value="${s}" ${cs.nom_segment===s?'selected':''}>${s}</option>`).join('')}
+      </select>
+    </div>
+    <div id="edit-cs-msg" class="alert" style="display:none;margin-bottom:0.8rem"></div>
+    <div style="display:flex;gap:0.6rem;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeEditModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveEditCatSeg(${id})">💾 Enregistrer</button>
+    </div>
+  `;
+  document.getElementById('edit-modal').style.display = 'flex';
+}
+
+async function saveEditCatSeg(id) {
+  const compId = document.getElementById('ecs-comp').value;
+  const cat = document.getElementById('ecs-cat').value.trim();
+  const seg = document.getElementById('ecs-seg').value;
+  if (!compId || !cat || !seg) { showMsg('edit-cs-msg','alert-error','Tous les champs sont obligatoires'); return; }
+  const { error } = await sb.from('categories_segments').update({ competition_id: parseInt(compId), nom_categorie: cat, nom_segment: seg }).eq('id', id);
+  if (error) { showMsg('edit-cs-msg','alert-error',error.message); return; }
+  closeEditModal();
+  loadManageCatSegs();
+}
+
+async function deleteCatSeg(id) {
+  const { data: linked } = await sb.from('entries').select('id').eq('category_segment_id', id).limit(1);
+  if (linked?.length) {
+    if (!confirm(`Ce segment contient des performances. Supprimer quand même ? Toutes les performances associées seront supprimées.`)) return;
+    // Delete child entries first
+    const { data: entries } = await sb.from('entries').select('id').eq('category_segment_id', id);
+    if (entries?.length) {
+      const entryIds = entries.map(e => e.id);
+      await sb.from('executed_elements').delete().in('entry_id', entryIds);
+      await sb.from('program_components').delete().in('entry_id', entryIds);
+      await sb.from('entries').delete().eq('category_segment_id', id);
+    }
+  } else {
+    if (!confirm('Supprimer cette catégorie/segment ?')) return;
+  }
+  const { error } = await sb.from('categories_segments').delete().eq('id', id);
+  if (error) { alert(error.message); return; }
+  loadManageCatSegs();
+  loadGlobalData();
 }
 
 // ============================================================
@@ -2264,7 +2517,15 @@ function fmt(n) { return n != null ? parseFloat(n).toFixed(2) : '—'; }
 function val(id) { return document.getElementById(id)?.value?.trim() || ''; }
 function intVal(id) { const v = parseInt(val(id)); return isNaN(v) ? null : v; }
 function floatVal(id) { const v = parseFloat(val(id)); return isNaN(v) ? null : v; }
-function escHtml(s) { return s?.replace(/'/g,"\\'") || ''; }
+function escHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 function skaterName(e) {
   const s1 = e.s1 || e.skater_1;
