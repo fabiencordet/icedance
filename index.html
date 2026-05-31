@@ -329,25 +329,25 @@
 
     /* ===== GLOBAL TABLE COMPACT ===== */
     #global-tbody td, #global-thead th { 
-      padding: 0.5rem 0.55rem; 
-      font-size: 0.8rem;
-      white-space: nowrap;
+      padding: 0.5rem 0.6rem; 
+      font-size: 0.82rem;
     }
-    #global-thead th { font-size: 0.7rem; }
+    #global-thead th { font-size: 0.72rem; }
     .global-table-wrap { overflow-x: auto; }
-    .global-table-wrap table { width: 100%; table-layout: fixed; }
-    .global-table-wrap th:nth-child(1)  { width: 170px; } /* Patineur */
-    .global-table-wrap th:nth-child(2)  { width: 56px;  } /* Nation */
-    .global-table-wrap th:nth-child(3)  { width: 160px; } /* Compétition */
-    .global-table-wrap th:nth-child(4)  { width: 72px;  } /* Saison */
-    .global-table-wrap th:nth-child(5)  { width: 120px; } /* Catégorie */
-    .global-table-wrap th:nth-child(6)  { width: 50px;  } /* Segment */
-    .global-table-wrap th:nth-child(7)  { width: 80px;  } /* Score total */
-    .global-table-wrap th:nth-child(8)  { width: 68px;  } /* Éléments */
-    .global-table-wrap th:nth-child(9)  { width: 80px;  } /* Composantes */
-    .global-table-wrap th:nth-child(10) { width: 68px;  } /* Déductions */
-    .global-table-wrap th:nth-child(11) { width: 100px; } /* Actions */
-    .global-table-wrap td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .global-table-wrap table { width: max-content; min-width: 100%; table-layout: auto; border-collapse: collapse; }
+    /* Min-widths per column so nothing collapses too small */
+    .global-table-wrap th:nth-child(1)  { min-width: 160px; } /* Patineur */
+    .global-table-wrap th:nth-child(2)  { min-width: 58px;  } /* Nation */
+    .global-table-wrap th:nth-child(3)  { min-width: 140px; } /* Compétition */
+    .global-table-wrap th:nth-child(4)  { min-width: 70px;  } /* Saison */
+    .global-table-wrap th:nth-child(5)  { min-width: 110px; } /* Catégorie */
+    .global-table-wrap th:nth-child(6)  { min-width: 220px; } /* Segment — long labels */
+    .global-table-wrap th:nth-child(7)  { min-width: 80px;  } /* Score total */
+    .global-table-wrap th:nth-child(8)  { min-width: 70px;  } /* Éléments */
+    .global-table-wrap th:nth-child(9)  { min-width: 80px;  } /* Composantes */
+    .global-table-wrap th:nth-child(10) { min-width: 70px;  } /* Déductions */
+    .global-table-wrap th:nth-child(11) { min-width: 90px;  } /* Actions */
+    .global-table-wrap td { white-space: nowrap; }
 
     /* ===== PROGRESS BAR ===== */
     .progress-bar { height: 4px; background: var(--navy-light); border-radius: 2px; overflow: hidden; margin-top: 0.5rem; }
@@ -378,36 +378,49 @@
     th.sortable:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
 
     /* column filter dropdown */
-    .col-filter-wrap { position: relative; display: inline-block; }
+    .col-filter-wrap { position: relative; display: inline-flex; align-items: center; }
     .col-filter-btn {
-      background: none; border: none; cursor: pointer; padding: 0 0.1rem;
-      color: var(--text-dim); font-size: 0.75rem; line-height: 1;
-      transition: color 0.15s; flex-shrink: 0;
+      background: none; border: none; cursor: pointer; padding: 2px 3px;
+      color: var(--text-dim); font-size: 0.8rem; line-height: 1;
+      transition: color 0.15s; flex-shrink: 0; border-radius: 3px;
     }
-    .col-filter-btn:hover, .col-filter-btn.active { color: var(--gold); }
+    .col-filter-btn:hover, .col-filter-btn.active { color: var(--gold); background: rgba(201,168,76,0.12); }
     .col-filter-dropdown {
-      position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
-      background: var(--navy-mid); border: 1px solid var(--border);
-      border-radius: var(--radius-sm); box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-      min-width: 160px; max-width: 220px; max-height: 260px; overflow-y: auto;
-      z-index: 1000; padding: 0.4rem 0;
+      position: fixed;
+      background: var(--navy-mid); border: 1px solid rgba(150,200,230,0.25);
+      border-radius: var(--radius-sm); box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+      width: 260px; max-height: 320px;
+      z-index: 9999;
+      display: flex; flex-direction: column;
     }
-    .col-filter-dropdown input {
-      width: calc(100% - 1rem); margin: 0.3rem 0.5rem 0.4rem;
-      background: rgba(255,255,255,0.06); border: 1px solid var(--border);
-      border-radius: 4px; padding: 0.3rem 0.5rem; color: var(--text);
-      font-size: 0.8rem; outline: none;
+    .col-filter-search-wrap {
+      padding: 0.5rem 0.6rem 0.4rem; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .col-filter-search-wrap input {
+      width: 100%;
+      background: rgba(255,255,255,0.07); border: 1px solid var(--border);
+      border-radius: 4px; padding: 0.35rem 0.6rem; color: var(--text);
+      font-size: 0.82rem; outline: none; font-family: 'DM Sans', sans-serif;
+    }
+    .col-filter-search-wrap input:focus { border-color: var(--gold); }
+    .col-filter-list {
+      overflow-y: auto; flex: 1; padding: 0.3rem 0;
     }
     .col-filter-opt {
-      padding: 0.4rem 0.8rem; font-size: 0.82rem; cursor: pointer;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.42rem 0.8rem; font-size: 0.83rem; cursor: pointer;
+      display: flex; align-items: center; gap: 0.55rem;
+      transition: background 0.1s;
     }
     .col-filter-opt:hover { background: rgba(201,168,76,0.1); color: var(--gold-light); }
     .col-filter-opt.selected { color: var(--gold); }
-    .col-filter-opt input[type=checkbox] { accent-color: var(--gold); flex-shrink: 0; }
-    .col-filter-actions { display: flex; gap: 0.4rem; padding: 0.4rem 0.6rem 0.2rem; border-top: 1px solid var(--border); margin-top: 0.2rem; }
-    .col-filter-actions button { flex: 1; font-size: 0.75rem; padding: 0.3rem; }
+    .col-filter-opt input[type=checkbox] { accent-color: var(--gold); flex-shrink: 0; width: 14px; height: 14px; cursor: pointer; }
+    .col-filter-opt .opt-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .col-filter-opt .opt-count { color: var(--text-dim); font-size: 0.73rem; flex-shrink: 0; }
+    .col-filter-actions {
+      display: flex; gap: 0.4rem; padding: 0.45rem 0.6rem;
+      border-top: 1px solid var(--border); flex-shrink: 0;
+    }
+    .col-filter-actions button { flex: 1; font-size: 0.76rem; padding: 0.32rem 0.5rem; }
 
     /* toggle sections */
     details > summary { cursor: pointer; list-style: none; }
@@ -1239,7 +1252,6 @@ const SEGMENTS = [
   'Pattern dance : Dutch Waltz',
   'Pattern dance : European Waltz',
   'Pattern dance : Finnstep',
-  'Pattern dance : Fourteenstep',
   'Pattern dance : Foxtrot',
   'Pattern dance : Golden Waltz',
   'Pattern dance : Hickory Hoedown',
@@ -1250,7 +1262,6 @@ const SEGMENTS = [
   'Pattern dance : Ravensburger Waltz',
   'Pattern dance : Rhumba',
   'Pattern dance : Rocker Foxtrot',
-  'Pattern dance : Rhythm Blues',
   'Pattern dance : Silver Samba',
   'Pattern dance : Starlight Waltz',
   'Pattern dance : Tango',
@@ -1258,7 +1269,7 @@ const SEGMENTS = [
   'Pattern dance : Tango Romantica',
   'Pattern dance : Tea-Time Foxtrot',
   'Pattern dance : Ten-Fox',
-  'Pattern dance : Waltz (Fiesta Tango)',
+  'Pattern dance : Fourteenstep',
   'Pattern dance : Viennese Waltz',
   'Pattern dance : Waltz (Fiesta Tango)',
   'Pattern dance : Westminster Waltz',
@@ -1340,13 +1351,12 @@ let openDropdownKey = null;
 let openDropdownEl = null;
 
 function toggleColFilterDropdown(colKey, btnEl) {
-  // Close if already open for same col
   if (openDropdownKey === colKey) { closeColFilterDropdown(); return; }
   closeColFilterDropdown();
   openDropdownKey = colKey;
   openDropdownEl = btnEl;
 
-  // Build unique values from globalData (unfiltered for this col, filtered for others)
+  // Build unique values
   const otherFiltered = applyFiltersExcept(colKey);
   const valuesMap = new Map();
   otherFiltered.forEach(e => {
@@ -1355,27 +1365,82 @@ function toggleColFilterDropdown(colKey, btnEl) {
     valuesMap.set(label, (valuesMap.get(label) || 0) + 1);
   });
   const values = [...valuesMap.entries()].sort((a,b) => a[0].localeCompare(b[0], undefined, {numeric:true}));
-
   const selected = globalColFilters[colKey] || new Set();
+
   const dropdown = document.createElement('div');
   dropdown.className = 'col-filter-dropdown';
   dropdown.id = 'col-filter-dropdown';
   dropdown.innerHTML = `
-    <input type="text" placeholder="Rechercher…" oninput="filterDropdownSearch(this,'${colKey}')" />
-    <div id="col-filter-list-${colKey}">
-      ${values.map(([val, count]) => `
+    <div class="col-filter-search-wrap">
+      <input type="text" placeholder="Rechercher…" id="col-filter-search-${colKey}" autocomplete="off" />
+    </div>
+    <div class="col-filter-list" id="col-filter-list-${colKey}">
+      ${values.length === 0 ? `<div style="padding:1rem;text-align:center;color:var(--text-dim);font-size:0.82rem">Aucune valeur</div>` :
+        values.map(([val, count]) => `
         <label class="col-filter-opt ${selected.has(val)?'selected':''}" data-val="${escHtml(val)}">
-          <input type="checkbox" ${selected.has(val)?'checked':''} data-col="${colKey}" data-val="${escHtml(val)}" onchange="toggleColFilterVal('${colKey}',this.dataset.val,this.checked)" />
-          <span>${escHtml(val)}</span>
-          <span style="margin-left:auto;color:var(--text-dim);font-size:0.75rem">${count}</span>
+          <input type="checkbox" ${selected.has(val)?'checked':''} data-col="${colKey}" data-val="${escHtml(val)}" />
+          <span class="opt-label" title="${escHtml(val)}">${escHtml(val)}</span>
+          <span class="opt-count">${count}</span>
         </label>`).join('')}
     </div>
     <div class="col-filter-actions">
-      <button class="btn btn-ghost btn-sm" onclick="clearColFilter('${colKey}')">Tout effacer</button>
-      <button class="btn btn-primary btn-sm" onclick="closeColFilterDropdown()">OK</button>
+      <button class="btn btn-ghost btn-sm" id="col-filter-clear-${colKey}">Tout effacer</button>
+      <button class="btn btn-primary btn-sm" id="col-filter-ok-${colKey}">OK</button>
     </div>`;
 
-  btnEl.parentElement.appendChild(dropdown);
+  // Attach to body (portal) so it's never clipped
+  document.body.appendChild(dropdown);
+
+  // Position it below the button using fixed coords
+  const rect = btnEl.getBoundingClientRect();
+  const ddW = 260;
+  let left = rect.left + rect.width / 2 - ddW / 2;
+  // Keep within viewport
+  if (left + ddW > window.innerWidth - 8) left = window.innerWidth - ddW - 8;
+  if (left < 8) left = 8;
+  let top = rect.bottom + 6;
+  // Flip up if too low
+  if (top + 320 > window.innerHeight - 8) top = rect.top - 320 - 6;
+  dropdown.style.left = left + 'px';
+  dropdown.style.top  = top  + 'px';
+
+  // Wire up search
+  const searchInput = document.getElementById(`col-filter-search-${colKey}`);
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.toLowerCase();
+    document.querySelectorAll(`#col-filter-list-${colKey} .col-filter-opt`).forEach(opt => {
+      opt.style.display = opt.dataset.val.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
+  searchInput.focus();
+
+  // Wire up checkboxes
+  dropdown.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const v = cb.dataset.val;
+      if (!globalColFilters[colKey]) globalColFilters[colKey] = new Set();
+      if (cb.checked) globalColFilters[colKey].add(v);
+      else globalColFilters[colKey].delete(v);
+      if (globalColFilters[colKey].size === 0) delete globalColFilters[colKey];
+      // Update selected class
+      cb.closest('.col-filter-opt').classList.toggle('selected', cb.checked);
+      buildGlobalThead();
+      globalPage = 1;
+      applyGlobalFilters();
+    });
+  });
+
+  // Clear button
+  document.getElementById(`col-filter-clear-${colKey}`).addEventListener('click', () => {
+    delete globalColFilters[colKey];
+    closeColFilterDropdown();
+    buildGlobalThead();
+    globalPage = 1;
+    applyGlobalFilters();
+  });
+
+  // OK button
+  document.getElementById(`col-filter-ok-${colKey}`).addEventListener('click', closeColFilterDropdown);
 
   // Close on outside click
   setTimeout(() => document.addEventListener('click', outsideColFilterClick), 0);
@@ -1392,24 +1457,6 @@ function closeColFilterDropdown() {
   document.removeEventListener('click', outsideColFilterClick);
   openDropdownKey = null;
   openDropdownEl = null;
-}
-
-function filterDropdownSearch(input, colKey) {
-  const q = input.value.toLowerCase();
-  const list = document.getElementById(`col-filter-list-${colKey}`);
-  list.querySelectorAll('.col-filter-opt').forEach(opt => {
-    opt.style.display = opt.querySelector('span').textContent.toLowerCase().includes(q) ? '' : 'none';
-  });
-}
-
-function toggleColFilterVal(colKey, val, checked) {
-  if (!globalColFilters[colKey]) globalColFilters[colKey] = new Set();
-  if (checked) globalColFilters[colKey].add(val);
-  else globalColFilters[colKey].delete(val);
-  if (globalColFilters[colKey].size === 0) delete globalColFilters[colKey];
-  buildGlobalThead();
-  globalPage = 1;
-  applyGlobalFilters();
 }
 
 function clearColFilter(colKey) {
